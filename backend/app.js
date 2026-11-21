@@ -28,50 +28,12 @@ app.use('/users', usersRouter);
 //no fix data or data structure
 //static data instead of databasis
 //------------------------------------------
+const database = require('./database');
 
 //Question: Where to do the process of a "Game" counting, just using one Char, checking etc ?
 
-const nLevels = 22;
-//constant entry: ~ 22 entries
-const levels  = [{
-  id : 1,
-  levelString : "asasasdasdfaffdaassd",
-  levelTypes : [
-    "asdf"
-  ]
-  },
-  {
-    id : 2,
-    levelString : "ghjklgjkhglkghjjgljkgjhgk",
-    levelTypes : [
-      "ghjkl",
-    ]
-  },
-  {
-    id : 3,
-    levelString : "qwertzwetzq677qwet648wetzeqtweqewr4q2",
-    levelTypes : [
-      "qwertz", "12345",
-    ]
-  },
-  {
-    id : 4,
-    levelString : "Hallo du. Ja, du! Du schreibst gerade einen schönen Text bla Bla BLA ....",
-    levelTypes : [
-        "Sätze"
-    ]
-  },
-  {
-    id : 5,
-    levelString : "wqoeui czcd7ew VGGgh jwd742hj djdhsdfk vgrh",
-    levelTypes : [
-        ".,;:", "Wörter", "Sätze"
-    ]
-  },
-]
-
 //all names have to be unique -> could also be used as ID (?)
-let users = [
+/*let users = [
   {
     userID : 1,
     name : "miri",
@@ -89,63 +51,8 @@ let users = [
       usesRRing = false,
       usesRLittle = false,
     ]
-  },
-  {
-    userID : 2,
-    name : "hermine",
-    textSize : 100,
-    isOnAudio : true,
-    hand : [
-      usesLThumb  = true,
-      usesLIndex = true,
-      usesLMiddle = true,
-      usesLRing = true,
-      uesLLittle = false,
-      usesRThumb = false,
-      usesRIndex = false,
-      usesRMiddle = false,
-      usesRRing = false,
-      usesRLittle = false,
-    ]
-  },
-  {
-    userID : 3,
-    name : "patrick",
-    textSize : 100,
-    isOnAudio : true,
-    hand : [
-      usesLThumb  = true,
-      usesLIndex = true,
-      usesLMiddle = true,
-      usesLRing = true,
-      uesLLittle = false,
-      usesRThumb = false,
-      usesRIndex = false,
-      usesRMiddle = false,
-      usesRRing = false,
-      usesRLittle = false,
-    ]
-  },
-  {
-    userID : 4,
-    name : "robert",
-    textSize : 100,
-    isOnAudio : true,
-    hand : [
-        usesLThumb  = true,
-        usesLIndex = true,
-        usesLMiddle = true,
-        usesLRing = true,
-        uesLLittle = false,
-        usesRThumb = false,
-        usesRIndex = false,
-        usesRMiddle = false,
-        usesRRing = false,
-        usesRLittle = false,
-    ],
-    keyMappings: {}
-  },
-]
+  }
+]*/
 
 const defaultKeyboardMappings = [
   {
@@ -187,9 +94,9 @@ const defaultKeyboardMappings = [
     }
   }
 ];
-//completed -> Erfolgreich abgeschloss
+//completed -> Erfolgreich abgeschlossen
 //finished -> Zuende gebracht (nicht abgebrochen) (all others should be deleted)
-var attempt = [
+/*var attempt = [
   {
     attemptId : 4,
     levelId : 2,
@@ -201,47 +108,40 @@ var attempt = [
     nMistakes : 10,
     percentCorrect : 88,
     timeDateStamp : 123456789
-  },
-  {
-    attemptId : 3,
-    levelId : 2,
-    userId : 1,
-    isFinish: true,
-    isCompleted : false,
-    stars : 0,
-    time : 12345678,
-    nMistakes : 100,
-    percentCorrect : 10,
-    timeDateStamp : 123456789
-  },
-  {
-    attemptId : 2,
-    levelId : 1,
-    userId : 2,
-    isFinish: true,
-    isCompleted : false,
-    stars : 0,
-    time : 12345678,
-    nMistakes : 100,
-    percentCorrect : 10,
-    timeDateStamp : 123456789
-  },
-  {
-    attempId : 1,
-    levelId : 1,
-    userId : 1,
-    isFinish: true,
-    isCompleted : false,
-    stars : 0,
-    time : 12345678,
-    nMistakes : 100,
-    percentCorrect : 10,
-    timeDateStamp : 123456789
-  },
-]
-const getLevels = () => levels
-const getNLevels = () => levels
-const getUserId = (name) => users.find(name).userId
+  }
+]*/
+const getLevels = () => {
+  return new Promise((resolve, reject) => {
+    database.all('SELECT * FROM levels', (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(rows);
+      }
+    });
+  });
+}
+
+const getNLevels = () => {
+  return new Promise((resolve, reject) => {
+    database.get('SELECT COUNT(levelID) AS nLevels FROM levels', (err, row) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(row ? row.nLevels : null);      }
+    });
+  })
+}
+const getUserId = (name) => {
+  return new Promise((resolve, reject) => {
+    database.get('SELECT userID FROM users WHERE name = ?', [name], (err, row) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(row ? row.userID : null);      }
+    });
+  })
+}
 const changeFingers = (userId, req) => {
     const user = users.get(userId);
     user.hand = req;
@@ -255,13 +155,25 @@ const changeFingers = (userId, req) => {
 }
 
 //get general level info
-app.get('/api/levels', (req, res) => {
-  res.json({levels: getLevels()})
+app.get('/api/levels', async (req, res) => {
+  try {
+    const levels = await getLevels();
+    res.json({levels: levels});
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({error: 'Could not retrieve levels'});
+  }
 });
 
 //get nLevels
-app.get('/api/nLevels', (req, res) => {
-  res.json({nLevels: getNLevels()})
+app.get('/api/nLevels', async (req, res) => {
+  try {
+    const nLevels = await getNLevels();
+    res.json({nLevels: nLevels});
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({error: 'Could not retrieve nLevels'});
+  }
 });
 
 //get amount of Completed Levels of the user
@@ -283,12 +195,18 @@ app.get('/api/users/:userId/days/:nDays/nAttemptsCompleted',  (req, res) => {
 });
 
 //verification login != first login
-app.get('app/userData/:name', (req, res) => {
-  res.json({id: getUserId(name)})
+app.get('/api/userData/:name', async(req, res) => {
+  try {
+    const userID = await getUserId(req.params.name);
+    res.json({userID: userID});
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({error: 'Could not find id by user-name'});
+  }
 });
 
 //first login
-app.post('app/userData', (req, res) => {
+app.post('/api/userData', (req, res) => {
   //TODO
 });
 
@@ -305,23 +223,23 @@ app.get('/api/users/:userId/levels/:levelId/attempts',  (req, res) => {
 });
 
 //when the attempt starts
-app.post('app/attempt', (req, res) => {
+app.post('/api/attempt', (req, res) => {
   //TODO
 });
 
 //When a mistake was made: increase the nMistakes
-app.put('app/mistake/:attemptId', (req, res) => {
+app.put('/api/mistake/:attemptId', (req, res) => {
   //TODO
 });
 
 //When an attempt is finished, isFinished is set on true
-app.put('app/isFinished/:attemptId', (req, res) => {
+app.put('/api/isFinished/:attemptId', (req, res) => {
   // calculates percantage, stars, time ...
   //TODO
 });
 
 //When the attempt was aborted
-app.delete('app/attempt/:attemptId', (req, res) => {
+app.delete('/api/attempt/:attemptId', (req, res) => {
   //TODO
 });
 
@@ -361,7 +279,7 @@ app.put('/api/finger/:userId', (req, res) => {
 });
 
 //needed for the representation of the settings
-app.get('app/finger/:userId', (req, res) => {
+app.get('/api/finger/:userId', (req, res) => {
   //TODO
 });
 
@@ -373,19 +291,18 @@ app.put('/api/keyboard/:userId', (req, res) => {});
 
 //-----------------------------------------------------
 // catch 404 and forward to error handler
-app.use(function(req, res, next) {
-  next(createError(404));
-});
+app.use((err, req, res, next) => {
+  if (err.status === 404) {
+    return res.status(404).json({
+      error: 'Route not found'
+    });
+  }
 
-// error handler
-app.use(function(err, req, res, next) {
-  // set locals, only providing error in development
-  res.locals.message = err.message;
-  res.locals.error = req.app.get('env') === 'development' ? err : {};
+  console.error(err);
 
-  // render the error page
-  res.status(err.status || 500);
-  res.render('error');
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal Server Error'
+  });
 });
 
 module.exports = app;
