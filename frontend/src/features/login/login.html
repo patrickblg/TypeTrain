@@ -1,0 +1,41 @@
+<div class="flex items-center justify-center min-h-[calc(100vh-100px)] bg-slate-50 p-4">
+  <!-- Login Card -->
+  <mat-card class="w-full max-w-xl p-6 sm:p-10 !rounded-lg border border-gray-100 shadow-sm bg-white">
+
+    <!-- Title -->
+    <mat-card-header class="flex justify-center mb-6">
+      <mat-card-title class="!text-2xl sm:!text-3xl !font-bold text-black text-center">
+        Willkommen beim Tipp-Trainer
+      </mat-card-title>
+    </mat-card-header>
+
+    <mat-card-content class="flex flex-col items-center">
+      <!-- Subtitle -->
+      <p class="text-center text-black font-medium mb-8 leading-relaxed">
+        Bitte gib deinen Namen ein, um deinen<br />
+        Lernfortschritt zu laden.
+      </p>
+
+      <!-- Single Input Field & Button -->
+      <div class="w-full flex flex-col items-center">
+
+        <div class="w-64 mb-6 flex flex-col">
+          <label class="text-xs text-gray-600 mb-1 ml-1">Dein Name</label>
+
+          <mat-form-field appearance="outline" class="w-full" subscriptSizing="dynamic">
+            <input matInput #nameInput placeholder="(z.B. Max)" class="text-black" />
+          </mat-form-field>
+        </div>
+
+        <!-- Start Button -->
+        <button
+          mat-flat-button
+          (click)="showProfile(nameInput.value)"
+          class="!bg-[#93C5FD] !text-black !font-bold !tracking-wide !px-8 !py-1 !rounded-md transition-colors hover:!bg-blue-400">
+          Profil anzeigen
+        </button>
+      </div>
+
+    </mat-card-content>
+  </mat-card>
+</div>
