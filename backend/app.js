@@ -423,12 +423,12 @@ app.post('/api/attempt', async (req, res) => {
 });
 
 //When a mistake was made: increase the nMistakes
-app.put('/api/mistake/:attemptId', async (req, res) => {
+app.patch('/api/mistake/:attemptId', async (req, res) => {
   //TODO
 });
 
 //When an attempt is finished, time, stars, percentage is calculated, independend if it was completed or not
-app.put('/api/finished/:attemptId', async (req, res) => {
+app.patch('/api/finished/:attemptId', async (req, res) => {
   // calculates percentage, stars, time ...
   //TODO
 });
@@ -450,7 +450,7 @@ app.get('/api/textSize/:userId', async (req, res) => {
 });
 
 //For the frontent and for the settings-page
-app.put('/api/textSize/:userId', async (req, res) => {
+app.patch('/api/textSize/:userId', async (req, res) => {
   //TODO
 });
 
@@ -460,13 +460,13 @@ app.get('/api/isAudio/:userId', async (req, res) => {
 });
 
 //For the frontent and for the settings-page
-app.put('/api/isAudio/:userId', async (req, res) => {
+app.patch('/api/isAudio/:userId', async (req, res) => {
   //TODO
 });
 
 //new fingers activated
 //adds all new fingers and will also add a new defaultkeyboard
-app.put('/api/finger/:userID', (req, res) => {
+app.patch('/api/finger/:userID', (req, res) => {
   const user = changeFingers(req.params.userID, req.body);
   if (!user) {
     return res.status(404).json({ error: 'User or fitting mapping not found' });
@@ -493,7 +493,7 @@ app.get('/api/keyboard/:userId', async (req, res) => {
 });
 
 //sends the whole keyboard and overwrittes the old keyboard
-app.put('/api/keyboard/:userId', async (req, res) => {
+app.patch('/api/keyboard/:userId', async (req, res) => {
   //TODO Hermine
 });
 
