@@ -161,9 +161,9 @@ const getNLevels = () => {
 
 //get amount of Completed Levels of the user
 //for the progressbar protocol
-const getNCompletedAttempts = (userId) => {
+const getNCompletedAttempts = (userID) => {
   return new Promise((resolve, reject) => {
-    database.get('SELECT COUNT(DISTINCT levelID) AS nCompletedLevels FROM attempts WHERE userId = ? AND isCompleted = 1',[userId], (err, row) => {
+    database.get('SELECT COUNT(DISTINCT levelID) AS nCompletedLevels FROM attempts WHERE userId = ? AND isCompleted = 1',[userID], (err, row) => {
       if (err) {
         reject(err);
       } else {
@@ -172,9 +172,9 @@ const getNCompletedAttempts = (userId) => {
   })
 }
 
-const getNAttemptsDays = (userId, nDays) => {
+const getNAttemptsDays = (userID, nDays) => {
   return new Promise((resolve, reject) => {
-    database.get('SELECT COUNT(levelID) AS nCompletedLevels FROM attempts WHERE userId = ? AND startTimeDateStamp >= ?',[userId, Date.now() - nDays * 24 * 60 * 60 * 1000], (err, row) => {
+    database.get('SELECT COUNT(levelID) AS nCompletedLevels FROM attempts WHERE userId = ? AND startTimeDateStamp >= ?',[userID, Date.now() - nDays * 24 * 60 * 60 * 1000], (err, row) => {
       if (err) {
         reject(err);
       } else {
@@ -183,9 +183,9 @@ const getNAttemptsDays = (userId, nDays) => {
   })
 }
 
-const getNCompletedAttemptsDays = (userId, nDays) => {
+const getNCompletedAttemptsDays = (userID, nDays) => {
   return new Promise((resolve, reject) => {
-    database.get('SELECT COUNT(levelID) AS nCompletedLevels FROM attempts WHERE userId = ? AND isCompleted = 1 AND startTimeDateStamp >= ?',[userId, Date.now() - nDays * 24 * 60 * 60 * 1000], (err, row) => {
+    database.get('SELECT COUNT(levelID) AS nCompletedLevels FROM attempts WHERE userId = ? AND isCompleted = 1 AND startTimeDateStamp >= ?',[userID, Date.now() - nDays * 24 * 60 * 60 * 1000], (err, row) => {
       if (err) {
         reject(err);
       } else {
@@ -270,6 +270,162 @@ const createAttempt = (data) => {
             }
           } else {
             resolve(this.lastID);      }
+        });
+  })
+}
+
+const allLevelPercent = async (userID) => {
+  try {
+    const nLevels = await getNLevels();
+    const nCompletedAttempts = await getNCompletedAttempts(userID);
+
+    return (100 / nLevels) * nCompletedAttempts;
+  } catch (err) {
+    throw err;
+  }
+};
+const deleteAttempt = (attemptID) => {
+  return new Promise((resolve, reject) => {
+    database.run('DELETE FROM attempts WHERE attemptID = ?', [attemptID],
+        function(err) {
+          if (err) {
+              reject(err);
+          } else {
+            resolve(this.changes);      }
+        });
+  })
+}
+
+const finishAttempt = async (attemptID) => {
+  const result = new Promise((resolve, reject) => {
+    database.get(
+        'SELECT a.nMistakes, l.levelString, a.startTimeDateStamp FROM attempts a JOIN levels l ON a.levelID = l.levelID WHERE a.attemptID = ? ', [attemptID], (err, row) => {
+      if (err) {
+      reject(err);
+    } else if (!row) {
+      reject(new Error("Attempt not found"));
+    } else {
+      resolve(row);
+    }
+    });
+  })
+  const data = await result;
+  const nMistakes  = data.nMistakes;
+  const nCharacters = data.levelString.length;
+  if (nCharacters === 0) {
+    throw new Error("Level string is empty");
+  }
+  const percentCorrect = (100 / nCharacters)* (nCharacters - nMistakes);
+  let isCompleted = false;
+  let stars = 0;
+  if(percentCorrect >= 70) {
+    isCompleted = true;
+    stars = 1;
+    if(percentCorrect >= 90) {
+      stars = 3;
+    } else if (percentCorrect >= 80){
+      stars = 2;
+    }
+  }
+  const time = Date.now() - data.startTimeDateStamp;
+  return new Promise((resolve, reject) => {
+    //If good enough: isCompleted = 1
+    //By some calculation:
+    // e.g. 100 / N Digits of Level * mistakes  -> percentCorrect
+    // > 90 -> 3 stars
+    // > 80 -> 2 stars
+    // > 70 -> 1 star and is Completed = 1
+    //Time = current - startTimeDateStamp
+    database.run(
+        'UPDATE attempts SET isCompleted = ?, stars = ?, time = ?, percentCorrect = ? WHERE attemptID = ?',
+        [isCompleted, stars, time, percentCorrect, attemptID],
+        function(err) {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(this.changes);      }
+        });
+  })
+}
+
+const addMistake = async (attemptID) => {
+  const result = new Promise((resolve, reject) => {
+    database.get(
+        'SELECT nMistakes FROM attempts WHERE attemptID = ? ', [attemptID], (err, row) => {
+          if (err) {
+            reject(err);
+          } else if (!row) {
+            reject(new Error("Attempt not found"));
+          } else {
+            resolve(row);
+          }
+        });
+  })
+  const data = await result;
+  const nMistakes = await data.nMistakes;
+  return new Promise((resolve, reject) => {
+    database.run(
+        'UPDATE attempts SET nMistakes = ? WHERE attemptID = ?',
+        [nMistakes + 1, attemptID],
+        function(err) {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(this.changes);      }
+        });
+  })
+}
+
+const getTextSize = (userID) => {
+  return new Promise((resolve, reject) => {
+    database.all('SELECT textSize FROM users WHERE userID = ?', [userID], (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(rows);
+      }
+    });
+  })
+}
+const updateTextSize = async (userID, data) => {
+  //TODO: verify that textSize is in range
+
+  return new Promise((resolve, reject) => {
+    database.run(
+        'UPDATE users SET textSize = ? WHERE userID = ?',
+        [data.textSize, userID],
+        function(err) {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(this.changes);      }
+        });
+  })
+}
+const getIsOnAudio = (userID) => {
+  return new Promise((resolve, reject) => {
+    database.all('SELECT isOnAudio FROM users WHERE userID = ?', [userID], (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(rows);
+      }
+    });
+  })
+}
+const updateIsOnAudio = async (userID, data) => {
+  return new Promise((resolve, reject) => {
+    database.run(
+        'UPDATE users SET isOnAudio = ? WHERE userID = ?',
+        [data.isOnAudio, userID],
+        function(err) {
+          if (data.isOnAudio !== 1 && data.isOnAudio !== 0) {
+            reject(new Error("Invalid value for isOnAudio"));
+          }
+          else if (err) {
+            reject(err);
+          } else {
+            resolve(this.changes);      }
         });
   })
 }
@@ -423,45 +579,127 @@ app.post('/api/attempt', async (req, res) => {
 });
 
 //When a mistake was made: increase the nMistakes
-app.patch('/api/mistake/:attemptId', async (req, res) => {
-  //TODO
+app.patch('/api/mistake/:attemptID', async (req, res) => {
+  try {
+    const changes = await addMistake(req.params.attemptID);
+    if (changes === 0) {
+      return res.status(404).json({ error: "Attempt not found" });
+    }
+
+    res.status(200).json({
+      message: "Mistakes successfully increased",
+      attemptID: req.params.attemptID
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Could not patch increased mistake" });
+  }
 });
 
-//When an attempt is finished, time, stars, percentage is calculated, independend if it was completed or not
-app.patch('/api/finished/:attemptId', async (req, res) => {
+//When an attempt is finished, time, stars, percentage is calculated, independent if it was completed or not
+app.patch('/api/finished/:attemptID', async (req, res) => {
   // calculates percentage, stars, time ...
-  //TODO
+  try {
+    const changes = await finishAttempt(req.params.attemptID);
+    if (changes === 0) {
+      return res.status(404).json({ error: "Attempt not found" });
+    }
+
+    res.status(200).json({
+      message: "Attempt successfully finished",
+      attemptID: req.params.attemptID
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Could not patch attempt" });
+  }
 });
 
 //When the attempt was aborted
 //should be called if something went wrong (maybe additionally if it makes more than 20min -> should be interpreted as aborted)
-app.delete('/api/attempt/:attemptId', async (req, res) => {
-  //TODO
+app.delete('/api/attempt/:attemptID', async (req, res) => {
+  try {
+    const deletedRows = await deleteAttempt(req.params.attemptID);
+    if (deletedRows === 0) {
+      return res.status(404).json({
+        error: "Attempt not found"
+      });
+    }
+    res.status(200).json({
+      message: "Attempt successfully deleted",
+      deletedRows: deletedRows
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Could not delete attempt" });
+  }
 });
 
 //Get the percentage of the total levels completed (progressbar level-overview-page)
-app.get('/api/allLevelPercent/:userId', async (req, res) => {
-  //TODO
+app.get('/api/allLevelPercent/:userID', async (req, res) => {
+  try {
+    const percentage = await allLevelPercent(req.params.userID);
+    res.json({percentage: percentage});
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({error: 'Could not calculate the percentage'});
+  }
 });
 
 //For the frontent and for the settings-page
-app.get('/api/textSize/:userId', async (req, res) => {
-  //TODO
+app.get('/api/textSize/:userID', async (req, res) => {
+  try {
+    const textSize = await getTextSize(req.params.userID);
+    res.json({textSize: textSize});
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({error: 'Could not get Textsize'});
+  }
 });
 
 //For the frontent and for the settings-page
-app.patch('/api/textSize/:userId', async (req, res) => {
-  //TODO
+app.patch('/api/textSize/:userID', async (req, res) => {
+  try {
+    const changes = await updateTextSize(req.params.userID, req.body);
+    if (changes === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.status(200).json({
+      message: "TextSize successfully changed",
+      attemptID: req.params.attemptID
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Could not patch textSize" });
+  }
 });
 
 //For the frontent and for the settings-page
-app.get('/api/isAudio/:userId', async (req, res) => {
-  //TODO
+app.get('/api/isAudio/:userID', async (req, res) => {
+  try {
+    const isOnAudio = await getIsOnAudio(req.params.userID);
+    res.json({isAudio: isOnAudio});
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({error: 'Could not get isAudio'});
+  }
 });
 
 //For the frontent and for the settings-page
-app.patch('/api/isAudio/:userId', async (req, res) => {
-  //TODO
+app.patch('/api/isAudio/:userID', async (req, res) => {
+  try {
+    const changes = await updateIsOnAudio(req.params.userID, req.body);
+    if (changes === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    res.status(200).json({
+      message: "IsOnAudio successfully changed",
+      attemptID: req.params.attemptID
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Could not patch IsOnAudio" });
+  }
 });
 
 //new fingers activated
