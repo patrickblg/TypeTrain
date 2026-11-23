@@ -1,6 +1,9 @@
 --Strg + Alt + l reformate
 --TODO: add Keytable etc.
 DROP TABLE levels;
+DROP TABLE users;
+DROP TABLE attempts;
+DROP TABLE level_types;
 CREATE TABLE IF NOT EXISTS levels
 (
     levelID     INTEGER PRIMARY KEY,
@@ -27,17 +30,18 @@ CREATE TABLE IF NOT EXISTS users
     textSize    INTEGER NOT NULL DEFAULT 100,
     isOnAudio   INTEGER NOT NULL DEFAULT 1,
 
-    usesLThumb  INTEGER NOT NULL DEFAULT 1,
-    usesLIndex  INTEGER NOT NULL DEFAULT 1,
-    usesLMiddle INTEGER NOT NULL DEFAULT 1,
-    usesLRing   INTEGER NOT NULL DEFAULT 1,
-    usesLLittle INTEGER NOT NULL DEFAULT 0,
-
-    usesRThumb  INTEGER NOT NULL DEFAULT 0,
-    usesRIndex  INTEGER NOT NULL DEFAULT 0,
-    usesRMiddle INTEGER NOT NULL DEFAULT 0,
-    usesRRing   INTEGER NOT NULL DEFAULT 0,
-    usesRLittle INTEGER NOT NULL DEFAULT 0,
+    usedFingers TEXT NOT NULL DEFAULT '[
+        "LThumb",
+        "LIndex",
+        "LMiddle",
+        "LRing",
+        "LLittle",
+        "RThumb",
+        "RIndex",
+        "RMiddle",
+        "RRing",
+        "RLittle"
+    ]',
 
     CHECK (isOnAudio IN (0, 1))
 );
@@ -52,11 +56,11 @@ CREATE TABLE IF NOT EXISTS attempts
     isCompleted    INTEGER NOT NULL DEFAULT 0,
     stars          INTEGER NOT NULL DEFAULT 0,
 
-    time           INTEGER NOT NULL,
-    nMistakes      INTEGER NOT NULL,
-    percentCorrect REAL    NOT NULL,
+    time           INTEGER NOT NULL DEFAULT 0,
+    nMistakes      INTEGER NOT NULL DEFAULT 0,
+    percentCorrect REAL NOT NULL DEFAULT 0,
 
-    timeDateStamp  INTEGER NOT NULL,
+    startTimeDateStamp  INTEGER NOT NULL,
 
     FOREIGN KEY (levelID)
         REFERENCES levels (levelID),
@@ -69,25 +73,26 @@ CREATE TABLE IF NOT EXISTS attempts
 );
 
 
-INSERT OR IGNORE INTO levels (levelID, levelString)
+INSERT INTO levels (levelID, levelString)
 VALUES (1, 'asasasdasdfaffdaassd'),
        (2, 'ghjklgjkhglkghjjgljkgjhgk'),
        (3, 'qwertzwetzq677qwet648wetzeqtweqewr4q2'),
        (4, 'Hallo du. Ja, du! Du schreibst gerade einen schönen Text bla Bla BLA ....'),
        (5, 'wqoeui czcd7ew VGGgh jwd742hj djdhsdfk vgrh');
 
-INSERT OR IGNORE INTO level_types (levelID, type)
+INSERT INTO level_types (levelID, type)
 VALUES (1, 'asdf'),
        (2, 'ghjkl'),
        (3, 'qwertz'),
        (3, '12345'),
        (4, 'Sätze'),
-       (5, '.,;:'),
-       (5, 'Wörter'),
-       (5, 'Sätze');
+       (5, '.,;:');
 
-INSERT OR IGNORE INTO users (userID, name)
+INSERT INTO users (userID, name)
 VALUES (1, 'miri'),
        (2, 'hermine'),
        (3, 'patrick'),
        (4, 'robert');
+
+INSERT INTO attempts (levelID, userID, startTimeDateStamp)
+VALUES (1,1, CAST(unixepoch('subsec') * 1000 AS INTEGER));
