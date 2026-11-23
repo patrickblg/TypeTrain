@@ -29,6 +29,7 @@ app.use('/users', usersRouter);
 //static data instead of databasis
 //------------------------------------------
 const database = require('./database');
+const {all} = require("express/lib/application");
 
 //Question: Where to do the process of a "Game" counting, just using one Char, checking etc ?
 
@@ -132,6 +133,20 @@ const getNLevels = () => {
     });
   })
 }
+
+//get amount of Completed Levels of the user
+//for the progressbar protocol
+const getNCompletedAttempts = (userId) => {
+  return new Promise((resolve, reject) => {
+    database.get('SELECT COUNT(DISTINCT levelID) AS nCompletedLevels FROM attempts WHERE userId = ? AND isCompleted = 1',[userId], (err, row) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(row ? row.nCompletedLevels : null);      }
+    });
+  })
+}
+
 const getUserId = (name) => {
   return new Promise((resolve, reject) => {
     database.get('SELECT userID FROM users WHERE name = ?', [name], (err, row) => {
@@ -143,6 +158,7 @@ const getUserId = (name) => {
   })
 }
 const changeFingers = (userId, req) => {
+    //TODO Hermine kannst du gerne deinem Entwurf anpassen
     const user = users.get(userId);
     user.hand = req;
     const matchingMapping = defaultKeyboardMappings.find(mapping =>
@@ -152,6 +168,17 @@ const changeFingers = (userId, req) => {
     );
     user.keyMappings = { ...matchingMapping.keyMappings };
     return user;
+}
+const getAllAttempts = (userId) => {
+  return new Promise((resolve, reject) => {
+    database.all('SELECT * FROM attempts WHERE userID = ? ', [userId], (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(rows);
+      }
+    });
+  })
 }
 
 //get general level info
@@ -178,8 +205,14 @@ app.get('/api/nLevels', async (req, res) => {
 
 //get amount of Completed Levels of the user
 //for the progressbar protocol
-app.get('/api/nCompletedLevels/:userId', (req, res) => {
-  //TODO
+app.get('/api/nCompletedLevels/:userID', async (req, res) => {
+  try {
+    const nCompletedLevels = await getNCompletedAttempts(req.params.userID);
+    res.json({nCompletedLevels : nCompletedLevels});
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({error: 'Could not find attemps by userid'});
+  }
 });
 
 //get amount of tried attemps Levels of the user in the last x days
@@ -211,8 +244,14 @@ app.post('/api/userData', (req, res) => {
 });
 
 //protocol data
-app.get('/api/allAttempts/:userId', (req, res) => {
-  //TODO
+app.get('/api/allAttempts/:userID', async(req, res) => {
+  try {
+    const allAttemps = await getAllAttempts(req.params.userID);
+    res.json({allAttemps : allAttemps});
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({error: 'Could not find attemps by userid'});
+  }
 });
 
 //Returns the attemps of the user and level (if there are many, then we have to decide if we choose the best or the last)
@@ -275,7 +314,8 @@ app.put('/api/finger/:userId', (req, res) => {
   if (!user) {
     return res.status(404).json({ error: 'User oder passendes Mapping nicht gefunden' });
   }
-  res.json(user);
+  res.json(user)
+  //TODO Hermine -> kannst du gerne deinem Entwurf anpassen
 });
 
 //needed for the representation of the settings
@@ -284,7 +324,10 @@ app.get('/api/finger/:userId', (req, res) => {
 });
 
 //the keyboard for this user
-app.get('/api/keyboard/:userId', (req, res) => {});
+app.get('/api/keyboard/:userId', (req, res) => {
+  //TODO Hermine
+  //Wie auch immer du es umsetzen willst
+});
 
 //sends the whole keyboard and overwrittes the old keyboard
 app.put('/api/keyboard/:userId', (req, res) => {});
