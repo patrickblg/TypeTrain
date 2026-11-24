@@ -109,9 +109,34 @@ const { toEnabledIds } = require('./services/layoutSuggester');
     time : 12345678,
     nMistakes : 10,
     percentCorrect : 88,
-    timeDateStamp : 123456789
+    startTimeDateStamp : 123456789
   }
 ]*/
+const ALLOWED_FINGERS = [
+  "LThumb",
+  "LIndex",
+  "LMiddle",
+  "LRing",
+  "LLittle",
+  "RThumb",
+  "RIndex",
+  "RMiddle",
+  "RRing",
+  "RLittle"
+];
+
+//fingers has to be an array
+//every element has to be part of ALLOWED_FINGERS
+//no finger may appear more than once in the array
+const validateFingers = (fingers) => {
+  if (!Array.isArray(fingers)) {
+    return false;
+  }
+
+  return fingers.every(finger => ALLOWED_FINGERS.includes(finger))
+      && new Set(fingers).size === fingers.length;
+};
+
 const getLevels = () => {
   return new Promise((resolve, reject) => {
     database.all('SELECT * FROM levels', (err, rows) => {
@@ -137,9 +162,31 @@ const getNLevels = () => {
 
 //get amount of Completed Levels of the user
 //for the progressbar protocol
-const getNCompletedAttempts = (userId) => {
+const getNCompletedAttempts = (userID) => {
   return new Promise((resolve, reject) => {
-    database.get('SELECT COUNT(DISTINCT levelID) AS nCompletedLevels FROM attempts WHERE userId = ? AND isCompleted = 1',[userId], (err, row) => {
+    database.get('SELECT COUNT(DISTINCT levelID) AS nCompletedLevels FROM attempts WHERE userId = ? AND isCompleted = 1',[userID], (err, row) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(row ? row.nCompletedLevels : null);      }
+    });
+  })
+}
+
+const getNAttemptsDays = (userID, nDays) => {
+  return new Promise((resolve, reject) => {
+    database.get('SELECT COUNT(levelID) AS nCompletedLevels FROM attempts WHERE userId = ? AND startTimeDateStamp >= ?',[userID, Date.now() - nDays * 24 * 60 * 60 * 1000], (err, row) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(row ? row.nCompletedLevels : null);      }
+    });
+  })
+}
+
+const getNCompletedAttemptsDays = (userID, nDays) => {
+  return new Promise((resolve, reject) => {
+    database.get('SELECT COUNT(levelID) AS nCompletedLevels FROM attempts WHERE userId = ? AND isCompleted = 1 AND startTimeDateStamp >= ?',[userID, Date.now() - nDays * 24 * 60 * 60 * 1000], (err, row) => {
       if (err) {
         reject(err);
       } else {
@@ -158,6 +205,23 @@ const getUserId = (name) => {
     });
   })
 }
+
+const createUser = (data) => {
+  return new Promise((resolve, reject) => {
+    database.run('INSERT INTO users (name) VALUES (?)', [data.name],
+        function(err) {
+          if (err) {
+            if (err.code === 'SQLITE_CONSTRAINT') {
+              reject(new Error("This user already exists"));
+              //databasis has the constraint:     name        TEXT    NOT NULL UNIQUE, included
+            } else {
+              reject(err);
+            }
+          } else {
+            resolve(this.lastID);      }
+        });
+  })
+}
 // const changeFingers = (userId, req) => {
 //     //TODO Hermine kannst du gerne deinem Entwurf anpassen
 //     const user = users.get(userId);
@@ -170,6 +234,7 @@ const getUserId = (name) => {
 //     user.keyMappings = { ...matchingMapping.keyMappings };
 //     return user;
 // }
+
 const getAllAttempts = (userId) => {
   return new Promise((resolve, reject) => {
     database.all('SELECT * FROM attempts WHERE userID = ? ', [userId], (err, rows) => {
@@ -182,6 +247,212 @@ const getAllAttempts = (userId) => {
   })
 }
 
+const getAllAttemptByLevel = (params) => {
+  return new Promise((resolve, reject) => {
+    database.all('SELECT * FROM attempts WHERE userID = ? AND levelID = ?', [params.userID, params.levelID], (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(rows);
+      }
+    });
+  })
+}
+
+const createAttempt = (data) => {
+  return new Promise((resolve, reject) => {
+    database.run('INSERT INTO attempts (levelID, userID, startTimeDateStamp) VALUES (?, ?, ?)', [data.levelID, data.userID, Date.now()],
+        function(err) {
+          if (err) {
+            if (err.code === 'SQLITE_CONSTRAINT') {
+              reject(new Error("This attempt already exists"));
+            } else {
+              reject(err);
+            }
+          } else {
+            resolve(this.lastID);      }
+        });
+  })
+}
+
+const allLevelPercent = async (userID) => {
+  try {
+    const nLevels = await getNLevels();
+    const nCompletedAttempts = await getNCompletedAttempts(userID);
+
+    return (100 / nLevels) * nCompletedAttempts;
+  } catch (err) {
+    throw err;
+  }
+};
+const deleteAttempt = (attemptID) => {
+  return new Promise((resolve, reject) => {
+    database.run('DELETE FROM attempts WHERE attemptID = ?', [attemptID],
+        function(err) {
+          if (err) {
+              reject(err);
+          } else {
+            resolve(this.changes);      }
+        });
+  })
+}
+
+const finishAttempt = async (attemptID) => {
+  const result = new Promise((resolve, reject) => {
+    database.get(
+        'SELECT a.nMistakes, l.levelString, a.startTimeDateStamp FROM attempts a JOIN levels l ON a.levelID = l.levelID WHERE a.attemptID = ? ', [attemptID], (err, row) => {
+      if (err) {
+      reject(err);
+    } else if (!row) {
+      reject(new Error("Attempt not found"));
+    } else {
+      resolve(row);
+    }
+    });
+  })
+  const data = await result;
+  const nMistakes  = data.nMistakes;
+  const nCharacters = data.levelString.length;
+  if (nCharacters === 0) {
+    throw new Error("Level string is empty");
+  }
+  const percentCorrect = (100 / nCharacters)* (nCharacters - nMistakes);
+  let isCompleted = false;
+  let stars = 0;
+  if(percentCorrect >= 70) {
+    isCompleted = true;
+    stars = 1;
+    if(percentCorrect >= 90) {
+      stars = 3;
+    } else if (percentCorrect >= 80){
+      stars = 2;
+    }
+  }
+  const time = Date.now() - data.startTimeDateStamp;
+  return new Promise((resolve, reject) => {
+    //If good enough: isCompleted = 1
+    //By some calculation:
+    // e.g. 100 / N Digits of Level * mistakes  -> percentCorrect
+    // > 90 -> 3 stars
+    // > 80 -> 2 stars
+    // > 70 -> 1 star and is Completed = 1
+    //Time = current - startTimeDateStamp
+    database.run(
+        'UPDATE attempts SET isCompleted = ?, stars = ?, time = ?, percentCorrect = ? WHERE attemptID = ?',
+        [isCompleted, stars, time, percentCorrect, attemptID],
+        function(err) {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(this.changes);      }
+        });
+  })
+}
+
+const addMistake = async (attemptID) => {
+  const result = new Promise((resolve, reject) => {
+    database.get(
+        'SELECT nMistakes FROM attempts WHERE attemptID = ? ', [attemptID], (err, row) => {
+          if (err) {
+            reject(err);
+          } else if (!row) {
+            reject(new Error("Attempt not found"));
+          } else {
+            resolve(row);
+          }
+        });
+  })
+  const data = await result;
+  const nMistakes = await data.nMistakes;
+  return new Promise((resolve, reject) => {
+    database.run(
+        'UPDATE attempts SET nMistakes = ? WHERE attemptID = ?',
+        [nMistakes + 1, attemptID],
+        function(err) {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(this.changes);      }
+        });
+  })
+}
+
+const getTextSize = (userID) => {
+  return new Promise((resolve, reject) => {
+    database.all('SELECT textSize FROM users WHERE userID = ?', [userID], (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(rows);
+      }
+    });
+  })
+}
+const updateTextSize = async (userID, data) => {
+  //TODO: verify that textSize is in range
+
+  return new Promise((resolve, reject) => {
+    database.run(
+        'UPDATE users SET textSize = ? WHERE userID = ?',
+        [data.textSize, userID],
+        function(err) {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(this.changes);      }
+        });
+  })
+}
+const getIsOnAudio = (userID) => {
+  return new Promise((resolve, reject) => {
+    database.all('SELECT isOnAudio FROM users WHERE userID = ?', [userID], (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(rows);
+      }
+    });
+  })
+}
+const updateIsOnAudio = async (userID, data) => {
+  return new Promise((resolve, reject) => {
+    database.run(
+        'UPDATE users SET isOnAudio = ? WHERE userID = ?',
+        [data.isOnAudio, userID],
+        function(err) {
+          if (data.isOnAudio !== 1 && data.isOnAudio !== 0) {
+            reject(new Error("Invalid value for isOnAudio"));
+          }
+          else if (err) {
+            reject(err);
+          } else {
+            resolve(this.changes);      }
+        });
+  })
+}
+
+//returns an array
+const getActiveFingers = (userId) => {
+  return new Promise((resolve, reject) => {
+    database.get('SELECT usedFingers FROM users WHERE userID = ? ', [userId], (err, row) => {
+      if (err) {
+        reject(err);
+      } else if (!row) {
+        reject(new Error("User not found"));
+      } else {
+        const fingers = JSON.parse(row.usedFingers);
+
+        if (!validateFingers(fingers)) {
+          reject(new Error("The fingers are not valid"));
+        } else {
+          resolve(fingers);
+        }
+      }
+    });
+  })
+}
+
+//-----------------endpoints------------------
 //get general level info
 app.get('/api/levels', async (req, res) => {
   try {
@@ -212,20 +483,41 @@ app.get('/api/nCompletedLevels/:userID', async (req, res) => {
     res.json({nCompletedLevels : nCompletedLevels});
   } catch (err) {
     console.error(err);
-    res.status(500).json({error: 'Could not find attemps by userid'});
+    res.status(500).json({error: 'Could not find attempts by userid'});
   }
 });
 
-//get amount of tried attemps Levels of the user in the last x days
+//get amount of tried (completed and not completed) attempts of the user in the last x days
 //for the progressbar protocol
-app.get('/api/users/:userId/days/:nDays/nAttempts',  (req, res) => {
-  //TODO
+//TODO: Should it be unique per Id?
+app.get('/api/users/:userID/days/:nDays/nAttempts',  async(req, res) => {
+  try {
+    const nDays = Number(req.params.nDays);
+    if (!Number.isInteger(nDays) || nDays < 0) {
+      return res.status(400).json({ error: 'Invalid number of days' });
+    }
+    const nAttempts = await getNAttemptsDays(req.params.userID, nDays);
+    res.json({nAttempts : nAttempts});
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({error: 'Could not find attempts by userid and in the last n days'});
+  }
 });
 
-//get amount of tried & completed attemps Levels of the user in the last x days
+//get amount of tried & completed attempts Levels of the user in the last x days
 //for the progressbar protocol
-app.get('/api/users/:userId/days/:nDays/nAttemptsCompleted',  (req, res) => {
-  //TODO
+app.get('/api/users/:userID/days/:nDays/nAttemptsCompleted',  async(req, res) => {
+  try {
+    const nDays = Number(req.params.nDays);
+    if (!Number.isInteger(nDays) || nDays < 0) {
+      return res.status(400).json({ error: 'Invalid number of days' });
+    }
+    const nCompletedAttempts = await getNCompletedAttemptsDays(req.params.userID, nDays);
+    res.json({nCompletedAttempts : nCompletedAttempts});
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({error: 'Could not find attempts by userid and in the last n days'});
+  }
 });
 
 //verification login != first login
@@ -240,8 +532,16 @@ app.get('/api/userData/:name', async(req, res) => {
 });
 
 //first login
-app.post('/api/userData', (req, res) => {
-  //TODO
+app.post('/api/users', async(req, res) => {
+  try {
+    const newUserId = await createUser(req.body);
+    res.status(201).json({ newUserId: newUserId });
+  } catch (err) {
+    if (err.message === "This user already exists") {
+      return res.status(409).json({ error: err.message });
+    }
+    res.status(500).json({ error: "Could not create user" });
+  }
 });
 
 //protocol data
@@ -255,57 +555,152 @@ app.get('/api/allAttempts/:userID', async(req, res) => {
   }
 });
 
-//Returns the attemps of the user and level (if there are many, then we have to decide if we choose the best or the last)
-//for the level-overview-page (combined with all levels information)
+//Returns the attempts of the user and level (if there are many, then we have to decide if we choose the best or the last)
+//for the level-overview-page (combined with all level-information)
 //if we use the last one, we can also use this for the "gratulation page"
-app.get('/api/users/:userId/levels/:levelId/attempts',  (req, res) => {
-   //TODO
+//current implementation: all attempts
+app.get('/api/users/:userID/levels/:levelID/attempts',  async (req, res) => {
+  try {
+    const attempt = await getAllAttemptByLevel(req.params);
+    res.json({attempt: attempt});
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({error: 'Could not find attempt by level and user'});
+  }
 });
 
-//when the attempt starts
-app.post('/api/attempt', (req, res) => {
-  //TODO
+//when the attempt starts, create an attempt
+app.post('/api/attempt', async (req, res) => {
+  try {
+    const newAttemptID = await createAttempt(req.body);
+    res.status(201).json({ newAttemptID: newAttemptID });
+  } catch (err) {
+    res.status(500).json({ error: "Could not create attempt" });
+  }
 });
 
 //When a mistake was made: increase the nMistakes
-app.put('/api/mistake/:attemptId', (req, res) => {
-  //TODO
+app.patch('/api/mistake/:attemptID', async (req, res) => {
+  try {
+    const changes = await addMistake(req.params.attemptID);
+    if (changes === 0) {
+      return res.status(404).json({ error: "Attempt not found" });
+    }
+
+    res.status(200).json({
+      message: "Mistakes successfully increased",
+      attemptID: req.params.attemptID
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Could not patch increased mistake" });
+  }
 });
 
-//When an attempt is finished, isFinished is set on true
-app.put('/api/isFinished/:attemptId', (req, res) => {
-  // calculates percantage, stars, time ...
-  //TODO
+//When an attempt is finished, time, stars, percentage is calculated, independent if it was completed or not
+app.patch('/api/finished/:attemptID', async (req, res) => {
+  // calculates percentage, stars, time ...
+  try {
+    const changes = await finishAttempt(req.params.attemptID);
+    if (changes === 0) {
+      return res.status(404).json({ error: "Attempt not found" });
+    }
+
+    res.status(200).json({
+      message: "Attempt successfully finished",
+      attemptID: req.params.attemptID
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Could not patch attempt" });
+  }
 });
 
 //When the attempt was aborted
-app.delete('/api/attempt/:attemptId', (req, res) => {
-  //TODO
+//should be called if something went wrong (maybe additionally if it makes more than 20min -> should be interpreted as aborted)
+app.delete('/api/attempt/:attemptID', async (req, res) => {
+  try {
+    const deletedRows = await deleteAttempt(req.params.attemptID);
+    if (deletedRows === 0) {
+      return res.status(404).json({
+        error: "Attempt not found"
+      });
+    }
+    res.status(200).json({
+      message: "Attempt successfully deleted",
+      deletedRows: deletedRows
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Could not delete attempt" });
+  }
 });
 
 //Get the percentage of the total levels completed (progressbar level-overview-page)
-app.get('/api/allLevelPercent/:userId', (req, res) => {
-  //TOOD
+app.get('/api/allLevelPercent/:userID', async (req, res) => {
+  try {
+    const percentage = await allLevelPercent(req.params.userID);
+    res.json({percentage: percentage});
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({error: 'Could not calculate the percentage'});
+  }
 });
 
 //For the frontent and for the settings-page
-app.get('/api/textSize/:userId', (req, res) => {
-  //TODO
+app.get('/api/textSize/:userID', async (req, res) => {
+  try {
+    const textSize = await getTextSize(req.params.userID);
+    res.json({textSize: textSize});
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({error: 'Could not get Textsize'});
+  }
 });
 
 //For the frontent and for the settings-page
-app.put('/api/textSize/:userId', (req, res) => {
-  //TODO
+app.patch('/api/textSize/:userID', async (req, res) => {
+  try {
+    const changes = await updateTextSize(req.params.userID, req.body);
+    if (changes === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.status(200).json({
+      message: "TextSize successfully changed",
+      attemptID: req.params.attemptID
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Could not patch textSize" });
+  }
 });
 
 //For the frontent and for the settings-page
-app.get('/api/isAudio/:userId', (req, res) => {
-  //TODO
+app.get('/api/isAudio/:userID', async (req, res) => {
+  try {
+    const isOnAudio = await getIsOnAudio(req.params.userID);
+    res.json({isAudio: isOnAudio});
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({error: 'Could not get isAudio'});
+  }
 });
 
 //For the frontent and for the settings-page
-app.put('/api/isAudio/:userId', (req, res) => {
-  //TODO
+app.patch('/api/isAudio/:userID', async (req, res) => {
+  try {
+    const changes = await updateIsOnAudio(req.params.userID, req.body);
+    if (changes === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    res.status(200).json({
+      message: "IsOnAudio successfully changed",
+      attemptID: req.params.attemptID
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Could not patch IsOnAudio" });
+  }
 });
 
 // ------------ keyboard -------------
