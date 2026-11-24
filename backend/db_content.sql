@@ -68,6 +68,22 @@ CREATE TABLE IF NOT EXISTS attempts
     CHECK (stars BETWEEN 0 AND 3)
 );
 
+CREATE TABLE IF NOT EXISTS key_mappings
+(
+    userID   INTEGER NOT NULL,
+    keyID    TEXT    NOT NULL,
+    fingerID TEXT    NOT NULL,
+    source   TEXT    NOT NULL DEFAULT 'suggested',
+
+    PRIMARY KEY (userID, keyID),
+
+    FOREIGN KEY (userID)
+        REFERENCES users (userID)
+        ON DELETE CASCADE,
+
+    CHECK (source IN ('suggested', 'manual'))
+);
+
 
 INSERT OR IGNORE INTO levels (levelID, levelString)
 VALUES (1, 'asasasdasdfaffdaassd'),

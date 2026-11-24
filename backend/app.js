@@ -30,6 +30,7 @@ app.use('/users', usersRouter);
 //------------------------------------------
 const database = require('./database');
 const {all} = require("express/lib/application");
+const { toEnabledIds } = require('./services/layoutSuggester');
 
 //Question: Where to do the process of a "Game" counting, just using one Char, checking etc ?
 
@@ -55,46 +56,46 @@ const {all} = require("express/lib/application");
   }
 ]*/
 
-const defaultKeyboardMappings = [
-  {
-    fingers: {
-      usesLThumb: true,
-      usesLIndex: true,
-      usesLMiddle: true,
-      usesLRing: true,
-      usesLLittle: false,
+// const defaultKeyboardMappings = [
+//   {
+//     fingers: {
+//       usesLThumb: true,
+//       usesLIndex: true,
+//       usesLMiddle: true,
+//       usesLRing: true,
+//       usesLLittle: false,
 
-      usesRThumb: false,
-      usesRIndex: true,
-      usesRMiddle: false,
-      usesRRing: false,
-      usesRLittle: false
-    },
-    keyMappings: {
-      KeyQ: 'lLittle',
-      KeyA: 'lLittle',
-      KeyY: 'lLittle',
-      KeyW: 'lRing',
-      KeyS: 'lRing',
-      KeyX: 'lRing',
-      KeyE: 'lMiddle',
-      KeyD: 'lMiddle',
-      KeyC: 'lMiddle',
-      KeyR: 'lIndex',
-      KeyT: 'lIndex',
-      KeyF: 'lIndex',
-      KeyG: 'lIndex',
-      KeyV: 'lIndex',
-      KeyB: 'lIndex',
-      KeyZ: 'rIndex',
-      KeyU: 'rIndex',
-      KeyH: 'rIndex',
-      KeyJ: 'rIndex',
-      KeyN: 'rIndex',
-      KeyM: 'rIndex'
-    }
-  }
-];
+//       usesRThumb: false,
+//       usesRIndex: true,
+//       usesRMiddle: false,
+//       usesRRing: false,
+//       usesRLittle: false
+//     },
+//     keyMappings: {
+//       KeyQ: 'lLittle',
+//       KeyA: 'lLittle',
+//       KeyY: 'lLittle',
+//       KeyW: 'lRing',
+//       KeyS: 'lRing',
+//       KeyX: 'lRing',
+//       KeyE: 'lMiddle',
+//       KeyD: 'lMiddle',
+//       KeyC: 'lMiddle',
+//       KeyR: 'lIndex',
+//       KeyT: 'lIndex',
+//       KeyF: 'lIndex',
+//       KeyG: 'lIndex',
+//       KeyV: 'lIndex',
+//       KeyB: 'lIndex',
+//       KeyZ: 'rIndex',
+//       KeyU: 'rIndex',
+//       KeyH: 'rIndex',
+//       KeyJ: 'rIndex',
+//       KeyN: 'rIndex',
+//       KeyM: 'rIndex'
+//     }
+//   }
+// ];
 //completed -> Erfolgreich abgeschlossen
 //finished -> Zuende gebracht (nicht abgebrochen) (all others should be deleted)
 /*var attempt = [
@@ -157,18 +158,18 @@ const getUserId = (name) => {
     });
   })
 }
-const changeFingers = (userId, req) => {
-    //TODO Hermine kannst du gerne deinem Entwurf anpassen
-    const user = users.get(userId);
-    user.hand = req;
-    const matchingMapping = defaultKeyboardMappings.find(mapping =>
-        Object.keys(mapping.fingers).every(finger =>
-            mapping.fingers[finger] === req[finger]
-        )
-    );
-    user.keyMappings = { ...matchingMapping.keyMappings };
-    return user;
-}
+// const changeFingers = (userId, req) => {
+//     //TODO Hermine kannst du gerne deinem Entwurf anpassen
+//     const user = users.get(userId);
+//     user.hand = req;
+//     const matchingMapping = defaultKeyboardMappings.find(mapping =>
+//         Object.keys(mapping.fingers).every(finger =>
+//             mapping.fingers[finger] === req[finger]
+//         )
+//     );
+//     user.keyMappings = { ...matchingMapping.keyMappings };
+//     return user;
+// }
 const getAllAttempts = (userId) => {
   return new Promise((resolve, reject) => {
     database.all('SELECT * FROM attempts WHERE userID = ? ', [userId], (err, rows) => {
@@ -307,30 +308,201 @@ app.put('/api/isAudio/:userId', (req, res) => {
   //TODO
 });
 
+// ------------ keyboard -------------
+const { DE_QWERTZ_KEYS, FINGER_META } = require('./data/keyboardLayout');
+const { suggestLayout, homesFor, toEnabledIds } = require('./services/layoutSuggester');
+
+const MAIN_KEY_IDS = DE_QWERTZ_KEYS.filter(k => k.zone === 'main').map(k => k.keyId);
+
+
+// ------------ database helpers -------------
+//TODO Miri gern anpassen
+function dbAll(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    database.all(sql, params, (err, rows) => (err ? reject(err) : resolve(rows)));
+  });
+}
+
+function dbGet(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    database.get(sql, params, (err, row) => (err ? reject(err) : resolve(row)));
+  });
+}
+
+function dbRun(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    database.run(sql, params, (err) => (err ? reject(err) : resolve()));
+  });
+}
+// ------------ helpers -------------
+function getFingerFlags(userRow) {
+  const flags = {};
+  for (const finger of FINGER_META) flags[finger.prop] = Boolean(userRow[finger.prop]);
+  return flags;
+}
+
+function setFingers(userId, flags) {
+  const setClause = FINGER_META.map(f => `${f.prop} = ?`).join(', ');
+  const values = FINGER_META.map(f => (flags[f.prop] ? 1 : 0));
+   return dbRun(`UPDATE users SET ${setClause} WHERE userID = ?`, [...values, userId]);
+}
+
+async function getMapping(userId) {
+  const rows = await dbAll('SELECT keyID, fingerID, source FROM key_mappings WHERE userID = ?', [userId]);
+  const mapping = {};
+  for (const row of rows) mapping[row.keyID] = { fingerId: row.fingerID, source: row.source };
+  return mapping;
+}
+
+// Only the manual keys: { KeyQ: 'lLittle', ... }
+async function getManualMapping(userId) {
+  const mapping = await getMapping(userId);
+  const manual = {};
+  for (const [keyId, entry] of Object.entries(mapping)) {
+    if (entry.source === 'manual') manual[keyId] = entry.fingerId;
+  }
+  return manual;
+}
+
+// Replaces the whole layout entries: [{ keyId, fingerId, source }]
+async function replaceMapping(userId, entries) {
+  await dbRun('BEGIN');
+  try {
+    await dbRun('DELETE FROM key_mappings WHERE userID = ?', [userId]);
+    for (const e of entries) {
+      await dbRun(
+        'INSERT INTO key_mappings (userID, keyID, fingerID, source) VALUES (?, ?, ?, ?)',
+        [userId, e.keyId, e.fingerId, e.source]
+      );
+    }
+    await dbRun('COMMIT');
+  } catch (err) {
+    await dbRun('ROLLBACK').catch(() => {});
+    throw err;
+  }
+}
+
+async function loadUser(req, res, next) {
+  try {
+    const userId = Number(req.params.userId);
+    if (!Number.isInteger(userId) || userId < 1) {
+      return res.status(400).json({ error: 'Invalid userId' });
+    }
+    const user = await getUser(userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    req.user = user;
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ------------ keyboard -------------
+
+function checkFingers(body) {
+  for (const finger of FINGER_META) {
+    if (typeof body?.[finger.prop] !== 'boolean') return `${finger.prop} must be true or false`;
+  }
+  if (toEnabledIds(body).length === 0) return 'At least one finger must be enabled';
+  return null;
+}
+
 //new fingers activated
 //adds all new fingers and will also add a new defaultkeyboard
-app.put('/api/finger/:userId', (req, res) => {
-  const user = changeFingers(req.params.userId, req.body);
-  if (!user) {
-    return res.status(404).json({ error: 'User oder passendes Mapping nicht gefunden' });
+app.put('/api/finger/:userId', loadUser, async (req, res, next) => {
+  try {
+    const error = checkFingers(req.body);
+    if (error) return res.status(400).json({ error });
+
+    await setFingers(req.user.userID, req.body);
+
+    const enabledIds = toEnabledIds(req.body);
+    const saved = Object.values(await getMapping(req.user.userID));
+    const needsNewSuggestion = saved.length === 0 || saved.some(e => !enabledIds.includes(e.fingerId));
+
+    res.json({ enabledIds, needsNewSuggestion });
+  } catch (err) {
+    next(err);
+  } 
+});
+
+//needed for the representation of the settings (saves only fingers no change of keyboard layout)
+app.get('/api/finger/:userId', loadUser, (req, res) => {
+  const fingers = getFingerFlags(req.user);
+  res.json({ fingers, enabledIds: toEnabledIds(fingers) });
+});
+
+// the current keyboard for this user
+app.get('/api/keyboard/:userId', loadUser, async (req, res, next) => {
+    try {
+    const mapping = await getMapping(req.user.userID);
+    const enabledIds = toEnabledIds(getFingerFlags(req.user));
+
+    const isComplete = MAIN_KEY_IDS.every(keyId => mapping[keyId] && enabledIds.includes(mapping[keyId].fingerId));
+    if (!isComplete) return res.json({ mapping, isComplete, homes: null, homeMode: null });
+
+    const fingerOfKey = {};
+    for (const [keyId, entry] of Object.entries(mapping)) fingerOfKey[keyId] = entry.fingerId;
+    const { homes, homeMode } = homesFor(fingerOfKey, enabledIds);
+
+    res.json({ mapping, isComplete, homes, homeMode });
+  } catch (err) {
+    next(err);
   }
-  res.json(user)
-  //TODO Hermine -> kannst du gerne deinem Entwurf anpassen
 });
 
-//needed for the representation of the settings
-app.get('/api/finger/:userId', (req, res) => {
-  //TODO
+// sends the whole keyboard and overwrittes the old keyboard
+app.put('/api/keyboard/:userId', loadUser, async (req, res, next) => {
+  try {
+    const mapping = req.body?.mapping;
+    if(!mapping || typeof mapping !== 'object') {
+      return res.status(400).json({error: 'mapping is missing'});
+    }
+
+    const enabledIds = toEnabledIds(getFingerFlags(req.user));
+    const entries = [];
+
+    for (const [keyId, value] of Object.entries(mapping)) {
+      const fingerId = typeof value === 'string' ? value : value?.fingerId;
+      const source = typeof value === 'string' ? 'manual' : (value?.source ?? 'manual');
+
+      if (!MAIN_KEY_IDS.includes(keyId)) return res.status(400).json({ error: `Unknown key: ${keyId}` });
+      if (!enabledIds.includes(fingerId)) return res.status(400).json({ error: `${keyId}: finger ${fingerId} is not enabled` });
+      if (source !== 'manual' && source !== 'suggested') return res.status(400).json({ error: `${keyId}: invalid source` });
+
+      entries.push({ keyId, fingerId, source });
+    }
+
+    const missing = MAIN_KEY_IDS.filter(keyId => !(keyId in mapping));
+    if (missing.length > 0) return res.status(400).json({ error: 'Layout is incomplete', missing });
+
+    await replaceMapping(req.user.userID, entries);
+    res.json({ saved: entries.length });
+  } catch (err) {
+    next(err);
+  }
 });
 
-//the keyboard for this user
-app.get('/api/keyboard/:userId', (req, res) => {
-  //TODO Hermine
-  //Wie auch immer du es umsetzen willst
-});
+// makes a suggestion based on selected fingers
+app.post('/api/keyboard/:userId/suggestion', loadUser, async (req, resm, next) => {
+  try {
+    const body = req.body || {}
+    let enabledIds = toEnabledIds(getFingerFlags(req.user));
+    if (body.fingers) {
+      const error = checkFingers(body.fingers);
+      if (error) return res.status(400).json({ error });
+      enabledIds = toEnabledIds(body.fingers);
+    }
 
-//sends the whole keyboard and overwrittes the old keyboard
-app.put('/api/keyboard/:userId', (req, res) => {});
+    const manualKeys = body.resetManual ? {} : await getManualMapping(req.user.userID);
+    const locked = { ...manualKeys, ...body.lockedKeys };
+
+    res.json(suggestLayout(enabledIds, locked));
+  } catch (err) {
+    next(err);
+  }
+
+});
 
 //-----------------------------------------------------
 // catch 404 and forward to error handler
