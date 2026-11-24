@@ -249,8 +249,8 @@ app.post('/api/userData', (req, res) => {
 //protocol data
 app.get('/api/allAttempts/:userID', async(req, res) => {
   try {
-    const allAttemps = await getAllAttempts(req.params.userID);
-    res.json({allAttemps : allAttemps});
+    const allAttempts = await getAllAttempts(req.params.userID);
+    res.json({allAttempts : allAttempts});
   } catch (err) {
     console.error(err);
     res.status(500).json({error: 'Could not find attemps by userid'});

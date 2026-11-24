@@ -3,7 +3,7 @@
   <!-- Stânga: Titlu + Numele utilizatorului -->
   <div class="flex items-center gap-12 sm:gap-20">
     <a
-      routerLink="/"
+      [routerLink]= "userName() ? '/levels': '/'"
       class="text-2xl sm:text-3xl font-bold text-[#222222] tracking-tight no-underline">
       Tipp-Trainer
     </a>
