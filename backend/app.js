@@ -23,18 +23,14 @@ app.use('/', indexRouter);
 app.use('/users', usersRouter);
 
 //------------------------------------------
-//This is just the vague structure
-//no error-handling
-//no fix data or data structure
-//static data instead of databasis
-//------------------------------------------
+
 const database = require('./database');
 const {all} = require("express/lib/application");
 const { toEnabledIds } = require('./services/layoutSuggester');
 
-//Question: Where to do the process of a "Game" counting, just using one Char, checking etc ?
+//TODO Where to do the process of a "Game" counting, just using one Char, checking etc ?
 
-//all names have to be unique -> could also be used as ID (?)
+//TODO all names have to be unique -> could also be used as ID (?)
 /*let users = [
   {
     userID : 1,
@@ -96,22 +92,6 @@ const { toEnabledIds } = require('./services/layoutSuggester');
 //     }
 //   }
 // ];
-//completed -> Erfolgreich abgeschlossen
-//finished -> Zuende gebracht (nicht abgebrochen) (all others should be deleted)
-/*var attempt = [
-  {
-    attemptId : 4,
-    levelId : 2,
-    userId : 1,
-    isFinish: true,
-    isCompleted : true,
-    stars : 2,
-    time : 12345678,
-    nMistakes : 10,
-    percentCorrect : 88,
-    startTimeDateStamp : 123456789
-  }
-]*/
 const ALLOWED_FINGERS = [
   "LThumb",
   "LIndex",
@@ -389,8 +369,7 @@ const getTextSize = (userID) => {
   })
 }
 const updateTextSize = async (userID, data) => {
-  //TODO: verify that textSize is in range
-
+  //TODO: verify that textSize is in range -> what is the range?
   return new Promise((resolve, reject) => {
     database.run(
         'UPDATE users SET textSize = ? WHERE userID = ?',
@@ -531,7 +510,13 @@ app.get('/api/userData/:name', async(req, res) => {
   }
 });
 
-//first login
+/**First login: Creates a new user
+ * POST api/users
+ * Request Body
+ * {
+ *     "name": "String"
+ * }
+ */
 app.post('/api/users', async(req, res) => {
   try {
     const newUserId = await createUser(req.body);
@@ -568,8 +553,14 @@ app.get('/api/users/:userID/levels/:levelID/attempts',  async (req, res) => {
     res.status(500).json({error: 'Could not find attempt by level and user'});
   }
 });
-
-//when the attempt starts, create an attempt
+/**when the attempt starts, create an attempt
+ * POST api/attempt
+ * Request Body
+ * {
+ *     "levelID": Integer,
+ *     "userID":  Integer
+ * }
+ */
 app.post('/api/attempt', async (req, res) => {
   try {
     const newAttemptID = await createAttempt(req.body);
@@ -657,7 +648,14 @@ app.get('/api/textSize/:userID', async (req, res) => {
   }
 });
 
-//For the frontent and for the settings-page
+/**Updates the textSize
+ * Purpose: For the frontent and for the settings-page
+ * PATCH api/textSize/:userID
+ * Request Body
+ * {
+ *     "textSize": Integer,
+ * }
+ */
 app.patch('/api/textSize/:userID', async (req, res) => {
   try {
     const changes = await updateTextSize(req.params.userID, req.body);
@@ -685,8 +683,15 @@ app.get('/api/isAudio/:userID', async (req, res) => {
     res.status(500).json({error: 'Could not get isAudio'});
   }
 });
-
-//For the frontent and for the settings-page
+/**Updates the Audio-Setting
+ * Purpose: For the frontent and for the settings-page
+ * PATCH api/isAudio/:userID
+ * Request Body
+ *    Valid values: {0,1}
+ * {
+ *     "isOnAudio": Integer,
+ * }
+ */
 app.patch('/api/isAudio/:userID', async (req, res) => {
   try {
     const changes = await updateIsOnAudio(req.params.userID, req.body);
@@ -708,7 +713,6 @@ const { DE_QWERTZ_KEYS, FINGER_META } = require('./data/keyboardLayout');
 const { suggestLayout, homesFor, toEnabledIds } = require('./services/layoutSuggester');
 
 const MAIN_KEY_IDS = DE_QWERTZ_KEYS.filter(k => k.zone === 'main').map(k => k.keyId);
-
 
 // ------------ database helpers -------------
 //TODO Miri gern anpassen
