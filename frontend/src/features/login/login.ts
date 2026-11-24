@@ -44,7 +44,7 @@ export class Login {
         this.isLoading.set(false);
         if(res.userID !== null){
           this.userSerivce.setCurrentUser(res.userID, trimmedName);
-          this.router.navigate(['/profile', res.userID]);
+          this.router.navigate(['/levels']);
         }else{
           this.errorMessage.set('Benutzer nicht gefuden.');
         }
