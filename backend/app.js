@@ -92,30 +92,7 @@ const { toEnabledIds } = require('./services/layoutSuggester');
 //     }
 //   }
 // ];
-const ALLOWED_FINGERS = [
-  "LThumb",
-  "LIndex",
-  "LMiddle",
-  "LRing",
-  "LLittle",
-  "RThumb",
-  "RIndex",
-  "RMiddle",
-  "RRing",
-  "RLittle"
-];
 
-//fingers has to be an array
-//every element has to be part of ALLOWED_FINGERS
-//no finger may appear more than once in the array
-const validateFingers = (fingers) => {
-  if (!Array.isArray(fingers)) {
-    return false;
-  }
-
-  return fingers.every(finger => ALLOWED_FINGERS.includes(finger))
-      && new Set(fingers).size === fingers.length;
-};
 
 const getLevels = () => {
   return new Promise((resolve, reject) => {
@@ -202,18 +179,6 @@ const createUser = (data) => {
         });
   })
 }
-// const changeFingers = (userId, req) => {
-//     //TODO Hermine kannst du gerne deinem Entwurf anpassen
-//     const user = users.get(userId);
-//     user.hand = req;
-//     const matchingMapping = defaultKeyboardMappings.find(mapping =>
-//         Object.keys(mapping.fingers).every(finger =>
-//             mapping.fingers[finger] === req[finger]
-//         )
-//     );
-//     user.keyMappings = { ...matchingMapping.keyMappings };
-//     return user;
-// }
 
 const getAllAttempts = (userId) => {
   return new Promise((resolve, reject) => {
@@ -407,27 +372,6 @@ const updateIsOnAudio = async (userID, data) => {
           } else {
             resolve(this.changes);      }
         });
-  })
-}
-
-//returns an array
-const getActiveFingers = (userId) => {
-  return new Promise((resolve, reject) => {
-    database.get('SELECT usedFingers FROM users WHERE userID = ? ', [userId], (err, row) => {
-      if (err) {
-        reject(err);
-      } else if (!row) {
-        reject(new Error("User not found"));
-      } else {
-        const fingers = JSON.parse(row.usedFingers);
-
-        if (!validateFingers(fingers)) {
-          reject(new Error("The fingers are not valid"));
-        } else {
-          resolve(fingers);
-        }
-      }
-    });
   })
 }
 
