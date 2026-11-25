@@ -30,68 +30,6 @@ const {all} = require("express/lib/application");
 //TODO Where to do the process of a "Game" counting, just using one Char, checking etc ?
 
 //TODO all names have to be unique -> could also be used as ID (?)
-/*let users = [
-  {
-    userID : 1,
-    name : "miri",
-    textSize : 100,
-    isOnAudio : true,
-    hand : [
-      usesLThumb  = true,
-      usesLIndex = true,
-      usesLMiddle = true,
-      usesLRing = true,
-      uesLLittle = false,
-      usesRThumb = false,
-      usesRIndex = false,
-      usesRMiddle = false,
-      usesRRing = false,
-      usesRLittle = false,
-    ]
-  }
-]*/
-
-// const defaultKeyboardMappings = [
-//   {
-//     fingers: {
-//       usesLThumb: true,
-//       usesLIndex: true,
-//       usesLMiddle: true,
-//       usesLRing: true,
-//       usesLLittle: false,
-
-//       usesRThumb: false,
-//       usesRIndex: true,
-//       usesRMiddle: false,
-//       usesRRing: false,
-//       usesRLittle: false
-//     },
-//     keyMappings: {
-//       KeyQ: 'lLittle',
-//       KeyA: 'lLittle',
-//       KeyY: 'lLittle',
-//       KeyW: 'lRing',
-//       KeyS: 'lRing',
-//       KeyX: 'lRing',
-//       KeyE: 'lMiddle',
-//       KeyD: 'lMiddle',
-//       KeyC: 'lMiddle',
-//       KeyR: 'lIndex',
-//       KeyT: 'lIndex',
-//       KeyF: 'lIndex',
-//       KeyG: 'lIndex',
-//       KeyV: 'lIndex',
-//       KeyB: 'lIndex',
-//       KeyZ: 'rIndex',
-//       KeyU: 'rIndex',
-//       KeyH: 'rIndex',
-//       KeyJ: 'rIndex',
-//       KeyN: 'rIndex',
-//       KeyM: 'rIndex'
-//     }
-//   }
-// ];
-
 
 const getLevels = () => {
   return new Promise((resolve, reject) => {
@@ -191,6 +129,25 @@ const getAllAttempts = (userId) => {
   })
 }
 
+const getIsCompletedLevel = async (levelID, userID) => {
+  const result =  new Promise((resolve, reject) => {
+    database.get('SELECT COUNT(*) AS count FROM attempts WHERE levelID = ? AND userID = ? AND isCompleted = 1 ', [levelID, userID], (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(rows);
+      }
+    });
+  })
+  const data = await result;
+  let isComplete = 0;
+  if (data.count >= 1) {
+    isComplete = 1;
+  }
+  return isComplete;
+
+}
+
 const getAllAttemptByLevel = (params) => {
   return new Promise((resolve, reject) => {
     database.all('SELECT * FROM attempts WHERE userID = ? AND levelID = ?', [params.userID, params.levelID], (err, rows) => {
@@ -236,7 +193,8 @@ const deleteAttempt = (attemptID) => {
           if (err) {
               reject(err);
           } else {
-            resolve(this.changes);      }
+            resolve(this.changes);
+          }
         });
   })
 }
@@ -288,7 +246,8 @@ const finishAttempt = async (attemptID) => {
           if (err) {
             reject(err);
           } else {
-            resolve(this.changes);      }
+            resolve(this.changes);
+          }
         });
   })
 }
@@ -348,11 +307,11 @@ const updateTextSize = async (userID, data) => {
 }
 const getIsOnAudio = (userID) => {
   return new Promise((resolve, reject) => {
-    database.all('SELECT isOnAudio FROM users WHERE userID = ?', [userID], (err, rows) => {
+    database.get('SELECT isOnAudio FROM users WHERE userID = ?', [userID], (err, row) => {
       if (err) {
         reject(err);
       } else {
-        resolve(rows);
+        resolve(row.isOnAudio);
       }
     });
   })
@@ -373,6 +332,38 @@ const updateIsOnAudio = async (userID, data) => {
         });
   })
 }
+
+const getIsTimer = (userID) => {
+  return new Promise((resolve, reject) => {
+    database.get('SELECT isTimer FROM users WHERE userID = ?', [userID], (err, row) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(row.isTimer);
+      }
+    });
+  })
+}
+const toggleIsTimer = async (userID) => {
+  const result = getIsTimer(userID);
+  const isTimer = await result;
+  let newTimer = 0;
+  if (isTimer === 0) {
+    newTimer = 1;
+  }
+  return new Promise((resolve, reject) => {
+    database.run(
+        'UPDATE users SET isTimer = ? WHERE userID = ?',
+        [newTimer, userID],
+        function(err) {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(this.changes);      }
+        });
+  })
+}
+
 
 //-----------------endpoints------------------
 //get general level info
@@ -513,6 +504,15 @@ app.post('/api/attempt', async (req, res) => {
   }
 });
 
+app.get('/api/completedLevel/:levelID/user/:userID', async (req, res) => {
+  try {
+    const isCompleted = await getIsCompletedLevel(req.params.levelID, req.params.userID);
+    res.json({isCompleted: isCompleted});
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({error: 'Could not find level or user'});
+  }
+})
 //When a mistake was made: increase the nMistakes
 app.patch('/api/mistake/:attemptID', async (req, res) => {
   try {
@@ -626,6 +626,7 @@ app.get('/api/isAudio/:userID', async (req, res) => {
     res.status(500).json({error: 'Could not get isAudio'});
   }
 });
+
 /**Updates the Audio-Setting
  * Purpose: For the frontent and for the settings-page
  * PATCH api/isAudio/:userID
@@ -651,6 +652,34 @@ app.patch('/api/isAudio/:userID', async (req, res) => {
   }
 });
 
+// get status of the timer
+app.get('/api/isTimer/:userID', async (req, res) => {
+  try {
+    const isTimer = await getIsTimer(req.params.userID);
+    res.json({isTimer: isTimer});
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({error: 'Could not get isTimer'});
+  }
+});
+
+//toggles the status of the timer
+app.patch('/api/isTimer/:userID', async (req, res) => {
+  try {
+    const changes = await toggleIsTimer(req.params.userID);
+    if (changes === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    res.status(200).json({
+      message: "IsTimer successfully changed",
+      attemptID: req.params.attemptID
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Could not patch isTimer" });
+  }
+});
+
 // ------------ keyboard -------------
 const { DE_QWERTZ_KEYS, FINGER_META } = require('./data/keyboardLayout');
 const { suggestLayout, homesFor, toEnabledIds } = require('./services/layoutSuggester');
@@ -658,7 +687,6 @@ const { suggestLayout, homesFor, toEnabledIds } = require('./services/layoutSugg
 const MAIN_KEY_IDS = DE_QWERTZ_KEYS.filter(k => k.zone === 'main').map(k => k.keyId);
 
 // ------------ database helpers -------------
-//TODO Miri gern anpassen
 function dbAll(sql, params = []) {
   return new Promise((resolve, reject) => {
     database.all(sql, params, (err, rows) => (err ? reject(err) : resolve(rows)));
