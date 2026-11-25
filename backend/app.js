@@ -26,7 +26,6 @@ app.use('/users', usersRouter);
 
 const database = require('./database');
 const {all} = require("express/lib/application");
-const { toEnabledIds } = require('./services/layoutSuggester');
 
 //TODO Where to do the process of a "Game" counting, just using one Char, checking etc ?
 
@@ -678,16 +677,23 @@ function dbRun(sql, params = []) {
   });
 }
 // ------------ helpers -------------
-function getFingerFlags(userRow) {
-  const flags = {};
-  for (const finger of FINGER_META) flags[finger.prop] = Boolean(userRow[finger.prop]);
-  return flags;
+function getUser(userId) {
+  return dbGet('SELECT * FROM users WHERE userID = ?', [userId]);
 }
 
-function setFingers(userId, flags) {
-  const setClause = FINGER_META.map(f => `${f.prop} = ?`).join(', ');
-  const values = FINGER_META.map(f => (flags[f.prop] ? 1 : 0));
-   return dbRun(`UPDATE users SET ${setClause} WHERE userID = ?`, [...values, userId]);
+function getFingers(userRow) {
+  try {
+    return JSON.parse(userRow.usedFingers || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function setFingers(userId, fingers) {
+  return dbRun(
+    'UPDATE users SET usedFingers = ? WHERE userID = ?',
+    [JSON.stringify(fingers), userId]
+  );
 }
 
 async function getMapping(userId) {
@@ -707,22 +713,30 @@ async function getManualMapping(userId) {
   return manual;
 }
 
+let mappingQueue = Promise.resolve();
+
 // Replaces the whole layout entries: [{ keyId, fingerId, source }]
-async function replaceMapping(userId, entries) {
-  await dbRun('BEGIN');
-  try {
-    await dbRun('DELETE FROM key_mappings WHERE userID = ?', [userId]);
-    for (const e of entries) {
-      await dbRun(
-        'INSERT INTO key_mappings (userID, keyID, fingerID, source) VALUES (?, ?, ?, ?)',
-        [userId, e.keyId, e.fingerId, e.source]
-      );
+function replaceMapping(userId, entries) {
+  const run = async () => {
+    await dbRun('BEGIN');
+    try {
+      await dbRun('DELETE FROM key_mappings WHERE userID = ?', [userId]);
+      for (const e of entries) {
+        await dbRun(
+          'INSERT INTO key_mappings (userID, keyID, fingerID, source) VALUES (?, ?, ?, ?)',
+          [userId, e.keyId, e.fingerId, e.source]
+        );
+      }
+      await dbRun('COMMIT');
+    } catch (err) {
+      await dbRun('ROLLBACK').catch(() => {});
+      throw err;
     }
-    await dbRun('COMMIT');
-  } catch (err) {
-    await dbRun('ROLLBACK').catch(() => {});
-    throw err;
-  }
+  };
+
+  const next = mappingQueue.then(run, run);
+  mappingQueue = next.catch(() => {});
+  return next;
 }
 
 async function loadUser(req, res, next) {
@@ -742,11 +756,13 @@ async function loadUser(req, res, next) {
 
 // ------------ keyboard -------------
 
-function checkFingers(body) {
-  for (const finger of FINGER_META) {
-    if (typeof body?.[finger.prop] !== 'boolean') return `${finger.prop} must be true or false`;
+function checkFingers(fingers) {
+  if (!Array.isArray(fingers)) return 'fingers must be an array';
+  if (fingers.length === 0) return 'At least one finger must be enabled';
+  const validIds = FINGER_META.map(f => f.id);
+  for (const id of fingers) {
+    if (!validIds.includes(id)) return `Unknown finger: ${id}`;
   }
-  if (toEnabledIds(body).length === 0) return 'At least one finger must be enabled';
   return null;
 }
 
@@ -754,32 +770,33 @@ function checkFingers(body) {
 //adds all new fingers and will also add a new defaultkeyboard
 app.put('/api/finger/:userId', loadUser, async (req, res, next) => {
   try {
-    const error = checkFingers(req.body);
+    const fingers = req.body?.fingers ?? req.body;
+    const error = checkFingers(fingers);
     if (error) return res.status(400).json({ error });
 
-    await setFingers(req.user.userID, req.body);
+    const enabledIds = [...new Set(fingers)];
+    await setFingers(req.user.userID, enabledIds);
 
-    const enabledIds = toEnabledIds(req.body);
     const saved = Object.values(await getMapping(req.user.userID));
     const needsNewSuggestion = saved.length === 0 || saved.some(e => !enabledIds.includes(e.fingerId));
 
     res.json({ enabledIds, needsNewSuggestion });
   } catch (err) {
     next(err);
-  } 
+  }
 });
 
 //needed for the representation of the settings (saves only fingers no change of keyboard layout)
 app.get('/api/finger/:userId', loadUser, (req, res) => {
-  const fingers = getFingerFlags(req.user);
-  res.json({ fingers, enabledIds: toEnabledIds(fingers) });
+const enabledIds = getFingers(req.user);
+  res.json({ fingers: enabledIds, enabledIds });
 });
 
 // the current keyboard for this user
 app.get('/api/keyboard/:userId', loadUser, async (req, res, next) => {
-    try {
+  try {
     const mapping = await getMapping(req.user.userID);
-    const enabledIds = toEnabledIds(getFingerFlags(req.user));
+    const enabledIds = getFingers(req.user);
 
     const isComplete = MAIN_KEY_IDS.every(keyId => mapping[keyId] && enabledIds.includes(mapping[keyId].fingerId));
     if (!isComplete) return res.json({ mapping, isComplete, homes: null, homeMode: null });
@@ -796,13 +813,13 @@ app.get('/api/keyboard/:userId', loadUser, async (req, res, next) => {
 
 // sends the whole keyboard and overwrittes the old keyboard
 app.put('/api/keyboard/:userId', loadUser, async (req, res, next) => {
-  try {
+try {
     const mapping = req.body?.mapping;
-    if(!mapping || typeof mapping !== 'object') {
-      return res.status(400).json({error: 'mapping is missing'});
+    if (!mapping || typeof mapping !== 'object') {
+      return res.status(400).json({ error: 'mapping is missing' });
     }
 
-    const enabledIds = toEnabledIds(getFingerFlags(req.user));
+    const enabledIds = getFingers(req.user);
     const entries = [];
 
     for (const [keyId, value] of Object.entries(mapping)) {
@@ -827,14 +844,14 @@ app.put('/api/keyboard/:userId', loadUser, async (req, res, next) => {
 });
 
 // makes a suggestion based on selected fingers
-app.post('/api/keyboard/:userId/suggestion', loadUser, async (req, resm, next) => {
+app.post('/api/keyboard/:userId/suggestion', loadUser, async (req, res, next) => {
   try {
-    const body = req.body || {}
-    let enabledIds = toEnabledIds(getFingerFlags(req.user));
+    const body = req.body || {};
+    let enabledIds = getFingers(req.user);
     if (body.fingers) {
       const error = checkFingers(body.fingers);
       if (error) return res.status(400).json({ error });
-      enabledIds = toEnabledIds(body.fingers);
+      enabledIds = [...new Set(body.fingers)];
     }
 
     const manualKeys = body.resetManual ? {} : await getManualMapping(req.user.userID);
@@ -844,7 +861,6 @@ app.post('/api/keyboard/:userId/suggestion', loadUser, async (req, resm, next) =
   } catch (err) {
     next(err);
   }
-
 });
 
 //-----------------------------------------------------
