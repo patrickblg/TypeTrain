@@ -33,68 +33,6 @@ const {all} = require("express/lib/application");
 //TODO Where to do the process of a "Game" counting, just using one Char, checking etc ?
 
 //TODO all names have to be unique -> could also be used as ID (?)
-/*let users = [
-  {
-    userID : 1,
-    name : "miri",
-    textSize : 100,
-    isOnAudio : true,
-    hand : [
-      usesLThumb  = true,
-      usesLIndex = true,
-      usesLMiddle = true,
-      usesLRing = true,
-      uesLLittle = false,
-      usesRThumb = false,
-      usesRIndex = false,
-      usesRMiddle = false,
-      usesRRing = false,
-      usesRLittle = false,
-    ]
-  }
-]*/
-
-// const defaultKeyboardMappings = [
-//   {
-//     fingers: {
-//       usesLThumb: true,
-//       usesLIndex: true,
-//       usesLMiddle: true,
-//       usesLRing: true,
-//       usesLLittle: false,
-
-//       usesRThumb: false,
-//       usesRIndex: true,
-//       usesRMiddle: false,
-//       usesRRing: false,
-//       usesRLittle: false
-//     },
-//     keyMappings: {
-//       KeyQ: 'lLittle',
-//       KeyA: 'lLittle',
-//       KeyY: 'lLittle',
-//       KeyW: 'lRing',
-//       KeyS: 'lRing',
-//       KeyX: 'lRing',
-//       KeyE: 'lMiddle',
-//       KeyD: 'lMiddle',
-//       KeyC: 'lMiddle',
-//       KeyR: 'lIndex',
-//       KeyT: 'lIndex',
-//       KeyF: 'lIndex',
-//       KeyG: 'lIndex',
-//       KeyV: 'lIndex',
-//       KeyB: 'lIndex',
-//       KeyZ: 'rIndex',
-//       KeyU: 'rIndex',
-//       KeyH: 'rIndex',
-//       KeyJ: 'rIndex',
-//       KeyN: 'rIndex',
-//       KeyM: 'rIndex'
-//     }
-//   }
-// ];
-
 
 const getLevels = () => {
   return new Promise((resolve, reject) => {
@@ -194,6 +132,25 @@ const getAllAttempts = (userId) => {
   })
 }
 
+const getIsCompletedLevel = async (levelID, userID) => {
+  const result =  new Promise((resolve, reject) => {
+    database.get('SELECT COUNT(*) AS count FROM attempts WHERE levelID = ? AND userID = ? AND isCompleted = 1 ', [levelID, userID], (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(rows);
+      }
+    });
+  })
+  const data = await result;
+  let isComplete = 0;
+  if (data.count >= 1) {
+    isComplete = 1;
+  }
+  return isComplete;
+
+}
+
 const getAllAttemptByLevel = (params) => {
   return new Promise((resolve, reject) => {
     database.all('SELECT * FROM attempts WHERE userID = ? AND levelID = ?', [params.userID, params.levelID], (err, rows) => {
@@ -239,7 +196,8 @@ const deleteAttempt = (attemptID) => {
           if (err) {
               reject(err);
           } else {
-            resolve(this.changes);      }
+            resolve(this.changes);
+          }
         });
   })
 }
@@ -291,7 +249,8 @@ const finishAttempt = async (attemptID) => {
           if (err) {
             reject(err);
           } else {
-            resolve(this.changes);      }
+            resolve(this.changes);
+          }
         });
   })
 }
@@ -351,11 +310,11 @@ const updateTextSize = async (userID, data) => {
 }
 const getIsOnAudio = (userID) => {
   return new Promise((resolve, reject) => {
-    database.all('SELECT isOnAudio FROM users WHERE userID = ?', [userID], (err, rows) => {
+    database.get('SELECT isOnAudio FROM users WHERE userID = ?', [userID], (err, row) => {
       if (err) {
         reject(err);
       } else {
-        resolve(rows);
+        resolve(row.isOnAudio);
       }
     });
   })
@@ -376,6 +335,38 @@ const updateIsOnAudio = async (userID, data) => {
         });
   })
 }
+
+const getIsTimer = (userID) => {
+  return new Promise((resolve, reject) => {
+    database.get('SELECT isTimer FROM users WHERE userID = ?', [userID], (err, row) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(row.isTimer);
+      }
+    });
+  })
+}
+const toggleIsTimer = async (userID) => {
+  const result = getIsTimer(userID);
+  const isTimer = await result;
+  let newTimer = 0;
+  if (isTimer === 0) {
+    newTimer = 1;
+  }
+  return new Promise((resolve, reject) => {
+    database.run(
+        'UPDATE users SET isTimer = ? WHERE userID = ?',
+        [newTimer, userID],
+        function(err) {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(this.changes);      }
+        });
+  })
+}
+
 
 //-----------------endpoints------------------
 //get general level info
@@ -516,6 +507,15 @@ app.post('/api/attempt', async (req, res) => {
   }
 });
 
+app.get('/api/completedLevel/:levelID/user/:userID', async (req, res) => {
+  try {
+    const isCompleted = await getIsCompletedLevel(req.params.levelID, req.params.userID);
+    res.json({isCompleted: isCompleted});
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({error: 'Could not find level or user'});
+  }
+})
 //When a mistake was made: increase the nMistakes
 app.patch('/api/mistake/:attemptID', async (req, res) => {
   try {
@@ -629,6 +629,7 @@ app.get('/api/isAudio/:userID', async (req, res) => {
     res.status(500).json({error: 'Could not get isAudio'});
   }
 });
+
 /**Updates the Audio-Setting
  * Purpose: For the frontent and for the settings-page
  * PATCH api/isAudio/:userID
@@ -654,6 +655,34 @@ app.patch('/api/isAudio/:userID', async (req, res) => {
   }
 });
 
+// get status of the timer
+app.get('/api/isTimer/:userID', async (req, res) => {
+  try {
+    const isTimer = await getIsTimer(req.params.userID);
+    res.json({isTimer: isTimer});
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({error: 'Could not get isTimer'});
+  }
+});
+
+//toggles the status of the timer
+app.patch('/api/isTimer/:userID', async (req, res) => {
+  try {
+    const changes = await toggleIsTimer(req.params.userID);
+    if (changes === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    res.status(200).json({
+      message: "IsTimer successfully changed",
+      attemptID: req.params.attemptID
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Could not patch isTimer" });
+  }
+});
+
 // ------------ keyboard -------------
 const { DE_QWERTZ_KEYS, FINGER_META } = require('./data/keyboardLayout');
 const { suggestLayout, homesFor, toEnabledIds } = require('./services/layoutSuggester');
@@ -661,7 +690,6 @@ const { suggestLayout, homesFor, toEnabledIds } = require('./services/layoutSugg
 const MAIN_KEY_IDS = DE_QWERTZ_KEYS.filter(k => k.zone === 'main').map(k => k.keyId);
 
 // ------------ database helpers -------------
-//TODO Miri gern anpassen
 function dbAll(sql, params = []) {
   return new Promise((resolve, reject) => {
     database.all(sql, params, (err, rows) => (err ? reject(err) : resolve(rows)));
@@ -680,16 +708,23 @@ function dbRun(sql, params = []) {
   });
 }
 // ------------ helpers -------------
-function getFingerFlags(userRow) {
-  const flags = {};
-  for (const finger of FINGER_META) flags[finger.prop] = Boolean(userRow[finger.prop]);
-  return flags;
+function getUser(userId) {
+  return dbGet('SELECT * FROM users WHERE userID = ?', [userId]);
 }
 
-function setFingers(userId, flags) {
-  const setClause = FINGER_META.map(f => `${f.prop} = ?`).join(', ');
-  const values = FINGER_META.map(f => (flags[f.prop] ? 1 : 0));
-   return dbRun(`UPDATE users SET ${setClause} WHERE userID = ?`, [...values, userId]);
+function getFingers(userRow) {
+  try {
+    return JSON.parse(userRow.usedFingers || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function setFingers(userId, fingers) {
+  return dbRun(
+    'UPDATE users SET usedFingers = ? WHERE userID = ?',
+    [JSON.stringify(fingers), userId]
+  );
 }
 
 async function getMapping(userId) {
@@ -709,22 +744,30 @@ async function getManualMapping(userId) {
   return manual;
 }
 
+let mappingQueue = Promise.resolve();
+
 // Replaces the whole layout entries: [{ keyId, fingerId, source }]
-async function replaceMapping(userId, entries) {
-  await dbRun('BEGIN');
-  try {
-    await dbRun('DELETE FROM key_mappings WHERE userID = ?', [userId]);
-    for (const e of entries) {
-      await dbRun(
-        'INSERT INTO key_mappings (userID, keyID, fingerID, source) VALUES (?, ?, ?, ?)',
-        [userId, e.keyId, e.fingerId, e.source]
-      );
+function replaceMapping(userId, entries) {
+  const run = async () => {
+    await dbRun('BEGIN');
+    try {
+      await dbRun('DELETE FROM key_mappings WHERE userID = ?', [userId]);
+      for (const e of entries) {
+        await dbRun(
+          'INSERT INTO key_mappings (userID, keyID, fingerID, source) VALUES (?, ?, ?, ?)',
+          [userId, e.keyId, e.fingerId, e.source]
+        );
+      }
+      await dbRun('COMMIT');
+    } catch (err) {
+      await dbRun('ROLLBACK').catch(() => {});
+      throw err;
     }
-    await dbRun('COMMIT');
-  } catch (err) {
-    await dbRun('ROLLBACK').catch(() => {});
-    throw err;
-  }
+  };
+
+  const next = mappingQueue.then(run, run);
+  mappingQueue = next.catch(() => {});
+  return next;
 }
 
 async function loadUser(req, res, next) {
@@ -744,11 +787,13 @@ async function loadUser(req, res, next) {
 
 // ------------ keyboard -------------
 
-function checkFingers(body) {
-  for (const finger of FINGER_META) {
-    if (typeof body?.[finger.prop] !== 'boolean') return `${finger.prop} must be true or false`;
+function checkFingers(fingers) {
+  if (!Array.isArray(fingers)) return 'fingers must be an array';
+  if (fingers.length === 0) return 'At least one finger must be enabled';
+  const validIds = FINGER_META.map(f => f.id);
+  for (const id of fingers) {
+    if (!validIds.includes(id)) return `Unknown finger: ${id}`;
   }
-  if (toEnabledIds(body).length === 0) return 'At least one finger must be enabled';
   return null;
 }
 
@@ -756,32 +801,33 @@ function checkFingers(body) {
 //adds all new fingers and will also add a new defaultkeyboard
 app.put('/api/finger/:userId', loadUser, async (req, res, next) => {
   try {
-    const error = checkFingers(req.body);
+    const fingers = req.body?.fingers ?? req.body;
+    const error = checkFingers(fingers);
     if (error) return res.status(400).json({ error });
 
-    await setFingers(req.user.userID, req.body);
+    const enabledIds = [...new Set(fingers)];
+    await setFingers(req.user.userID, enabledIds);
 
-    const enabledIds = toEnabledIds(req.body);
     const saved = Object.values(await getMapping(req.user.userID));
     const needsNewSuggestion = saved.length === 0 || saved.some(e => !enabledIds.includes(e.fingerId));
 
     res.json({ enabledIds, needsNewSuggestion });
   } catch (err) {
     next(err);
-  } 
+  }
 });
 
 //needed for the representation of the settings (saves only fingers no change of keyboard layout)
 app.get('/api/finger/:userId', loadUser, (req, res) => {
-  const fingers = getFingerFlags(req.user);
-  res.json({ fingers, enabledIds: toEnabledIds(fingers) });
+const enabledIds = getFingers(req.user);
+  res.json({ fingers: enabledIds, enabledIds });
 });
 
 // the current keyboard for this user
 app.get('/api/keyboard/:userId', loadUser, async (req, res, next) => {
-    try {
+  try {
     const mapping = await getMapping(req.user.userID);
-    const enabledIds = toEnabledIds(getFingerFlags(req.user));
+    const enabledIds = getFingers(req.user);
 
     const isComplete = MAIN_KEY_IDS.every(keyId => mapping[keyId] && enabledIds.includes(mapping[keyId].fingerId));
     if (!isComplete) return res.json({ mapping, isComplete, homes: null, homeMode: null });
@@ -798,13 +844,13 @@ app.get('/api/keyboard/:userId', loadUser, async (req, res, next) => {
 
 // sends the whole keyboard and overwrittes the old keyboard
 app.put('/api/keyboard/:userId', loadUser, async (req, res, next) => {
-  try {
+try {
     const mapping = req.body?.mapping;
-    if(!mapping || typeof mapping !== 'object') {
-      return res.status(400).json({error: 'mapping is missing'});
+    if (!mapping || typeof mapping !== 'object') {
+      return res.status(400).json({ error: 'mapping is missing' });
     }
 
-    const enabledIds = toEnabledIds(getFingerFlags(req.user));
+    const enabledIds = getFingers(req.user);
     const entries = [];
 
     for (const [keyId, value] of Object.entries(mapping)) {
@@ -829,14 +875,14 @@ app.put('/api/keyboard/:userId', loadUser, async (req, res, next) => {
 });
 
 // makes a suggestion based on selected fingers
-app.post('/api/keyboard/:userId/suggestion', loadUser, async (req, resm, next) => {
+app.post('/api/keyboard/:userId/suggestion', loadUser, async (req, res, next) => {
   try {
-    const body = req.body || {}
-    let enabledIds = toEnabledIds(getFingerFlags(req.user));
+    const body = req.body || {};
+    let enabledIds = getFingers(req.user);
     if (body.fingers) {
       const error = checkFingers(body.fingers);
       if (error) return res.status(400).json({ error });
-      enabledIds = toEnabledIds(body.fingers);
+      enabledIds = [...new Set(body.fingers)];
     }
 
     const manualKeys = body.resetManual ? {} : await getManualMapping(req.user.userID);
@@ -846,7 +892,6 @@ app.post('/api/keyboard/:userId/suggestion', loadUser, async (req, resm, next) =
   } catch (err) {
     next(err);
   }
-
 });
 
 //-----------------------------------------------------

@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS users
 
     textSize    INTEGER NOT NULL DEFAULT 100,
     isOnAudio   INTEGER NOT NULL DEFAULT 1,
+    isTimer   INTEGER NOT NULL DEFAULT 0,
 
     usedFingers TEXT NOT NULL DEFAULT '[
         "LThumb",

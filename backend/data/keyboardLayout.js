@@ -99,22 +99,22 @@ const DE_QWERTZ_KEYS = [
 ];
 
 const FINGER_META = [
-  { prop: 'usesLLittle', id: 'lLittle', side: 'L', agility: 0.7 },
-  { prop: 'usesLRing',   id: 'lRing',   side: 'L', agility: 0.85 },
-  { prop: 'usesLMiddle', id: 'lMiddle', side: 'L', agility: 1.0 },
-  { prop: 'usesLIndex',  id: 'lIndex',  side: 'L', agility: 1.0 },
-  { prop: 'usesLThumb',  id: 'lThumb',  side: 'L', agility: 1.0, isThumb: true },
-  { prop: 'usesRThumb',  id: 'rThumb',  side: 'R', agility: 1.0, isThumb: true },
-  { prop: 'usesRIndex',  id: 'rIndex',  side: 'R', agility: 1.0 },
-  { prop: 'usesRMiddle', id: 'rMiddle', side: 'R', agility: 1.0 },
-  { prop: 'usesRRing',   id: 'rRing',   side: 'R', agility: 0.85 },
-  { prop: 'usesRLittle', id: 'rLittle', side: 'R', agility: 0.7 }
+  { prop: 'usesLLittle', id: 'LLittle', side: 'L', agility: 0.7 },
+  { prop: 'usesLRing',   id: 'LRing',   side: 'L', agility: 0.85 },
+  { prop: 'usesLMiddle', id: 'LMiddle', side: 'L', agility: 1.0 },
+  { prop: 'usesLIndex',  id: 'LIndex',  side: 'L', agility: 1.0 },
+  { prop: 'usesLThumb',  id: 'LThumb',  side: 'L', agility: 1.0, isThumb: true },
+  { prop: 'usesRThumb',  id: 'RThumb',  side: 'R', agility: 1.0, isThumb: true },
+  { prop: 'usesRIndex',  id: 'RIndex',  side: 'R', agility: 1.0 },
+  { prop: 'usesRMiddle', id: 'RMiddle', side: 'R', agility: 1.0 },
+  { prop: 'usesRRing',   id: 'RRing',   side: 'R', agility: 0.85 },
+  { prop: 'usesRLittle', id: 'RLittle', side: 'R', agility: 0.7 }
 ];
 
 const HOME_KEYS = {
-  lLittle: 'KeyA', lRing: 'KeyS', lMiddle: 'KeyD', lIndex: 'KeyF',
-  rIndex: 'KeyJ', rMiddle: 'KeyK', rRing: 'KeyL', rLittle: 'KeyÖ',
-  lThumb: 'Space', rThumb: 'Space'
+  LLittle: 'KeyA', LRing: 'KeyS', LMiddle: 'KeyD', LIndex: 'KeyF',
+  RIndex: 'KeyJ', RMiddle: 'KeyK', RRing: 'KeyL', RLittle: 'KeyÖ',
+  LThumb: 'Space', RThumb: 'Space'
 };
 
 module.exports = { DE_QWERTZ_KEYS, FINGER_META, HOME_KEYS };
