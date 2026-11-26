@@ -1,8 +1,9 @@
-import {Component, inject} from '@angular/core';
+import {Component, inject, signal} from '@angular/core';
 import {MatCard, MatCardContent, MatCardHeader, MatCardTitle} from '@angular/material/card';
 import {MatFormField, MatInputModule, MatLabel} from '@angular/material/input';
-import {ActivatedRoute, Router} from '@angular/router';
+import {Router} from '@angular/router';
 import {MatButton} from '@angular/material/button';
+import {UserService} from '../../core/service/user-service';
 
 
 @Component({
@@ -14,7 +15,6 @@ import {MatButton} from '@angular/material/button';
     MatCardTitle,
     MatCardContent,
     MatFormField,
-    MatLabel,
     MatButton,
   ],
   templateUrl: './login.html',
@@ -23,10 +23,37 @@ import {MatButton} from '@angular/material/button';
 export class Login {
 
   private readonly router = inject(Router);
+  private readonly userSerivce = inject(UserService);
+
+  readonly isLoading = signal(false);
+  readonly errorMessage = signal<string | null>(null);
 
   showProfile(nameInput: string): void {
-    if(nameInput.trim()){
-      this.router.navigate(['/profile', nameInput]);
+    const trimmedName = nameInput.trim();
+    if(!trimmedName) {
+      this.errorMessage.set('Bitte gib einen Namen ein.');
+      return;
     }
+
+    this.isLoading.set(true);
+    this.errorMessage.set(null);
+
+    this.userSerivce.getUserIdbyName(trimmedName).subscribe({
+      next: (res) => {
+        console.log(res);
+        this.isLoading.set(false);
+        if(res.userID !== null){
+          this.userSerivce.setCurrentUser(res.userID, trimmedName);
+          this.router.navigate(['/levels']);
+        }else{
+          this.errorMessage.set('Benutzer nicht gefuden.');
+        }
+      },
+      error: (err) => {
+        console.error('login error: ',err);
+        this.isLoading.set(false);
+        this.errorMessage.set('Verbindung zum Server fehlgeschlagen.');
+      }
+    })
   }
 }

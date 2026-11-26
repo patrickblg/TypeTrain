@@ -3,11 +3,14 @@ var express = require('express');
 var path = require('path');
 var cookieParser = require('cookie-parser');
 var logger = require('morgan');
+var cors = require('cors');
 
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
 
 var app = express();
+
+app.use(cors());
 
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
@@ -466,8 +469,8 @@ app.post('/api/users', async(req, res) => {
 //protocol data
 app.get('/api/allAttempts/:userID', async(req, res) => {
   try {
-    const allAttemps = await getAllAttempts(req.params.userID);
-    res.json({allAttemps : allAttemps});
+    const allAttempts = await getAllAttempts(req.params.userID);
+    res.json({allAttempts : allAttempts});
   } catch (err) {
     console.error(err);
     res.status(500).json({error: 'Could not find attemps by userid'});

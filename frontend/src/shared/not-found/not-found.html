@@ -1,0 +1,24 @@
+<div class="min-h-[calc(100vh-76px)] bg-[#FAFAFA] flex items-center justify-center px-4 py-8">
+  <div class="w-full max-w-md bg-white border border-gray-200 rounded-lg px-8 py-10 text-center flex flex-col items-center gap-4">
+
+    <div class="w-16 h-16 rounded-xl bg-[#E4ECFA] flex items-center justify-center">
+      <span class="text-2xl font-bold text-[#16425B]">404</span>
+    </div>
+
+    <div class="flex flex-col gap-1.5">
+      <h1 class="text-xl font-semibold text-[#1F2937]">
+        Seite nicht gefunden
+      </h1>
+      <p class="text-sm text-gray-500">
+        Die angeforderte Seite existiert leider nicht oder wurde verschoben.
+      </p>
+    </div>
+
+    <a
+      [routerLink]="isLoggedIn() ? '/levels' : '/login'"
+      class="mt-2 inline-flex items-center justify-center bg-[#93C5FD] hover:bg-blue-400 text-black text-sm font-semibold px-6 py-2.5 rounded-lg transition-colors no-underline">
+      {{ isLoggedIn() ? 'Zurück zur Lektionsübersicht' : 'Zurück zum Login' }}
+    </a>
+
+  </div>
+</div>

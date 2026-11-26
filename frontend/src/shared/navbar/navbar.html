@@ -1,0 +1,55 @@
+<nav class="w-full bg-[#DCE8FA] px-6 py-3 flex flex-wrap items-center justify-between gap-4">
+
+  <!-- Stânga: Titlu + Numele utilizatorului -->
+  <div class="flex items-center gap-12 sm:gap-20">
+    <a
+      [routerLink]= "userName() ? '/levels': '/'"
+      class="text-2xl sm:text-3xl font-bold text-[#222222] tracking-tight no-underline">
+      Tipp-Trainer
+    </a>
+
+    @if (userName()) {
+      <span class="text-2xl sm:text-3xl font-normal text-[#16425B]">
+        {{ userName() }}
+      </span>
+    }
+  </div>
+
+  <!-- Centru: Navigare (Einstellungen & Protokoll) -->
+  <div class="flex items-center gap-3">
+    <button
+      type="button"
+      routerLink="/settings"
+      routerLinkActive="ring-2 ring-blue-400"
+      class="bg-[#F4F5F7] hover:bg-white text-[#333333] text-sm font-medium px-5 py-3.5 rounded-lg shadow-[0_2px_4px_rgba(0,0,0,0.14)] transition-colors cursor-pointer">
+      Einstellungen
+    </button>
+
+    <button
+      type="button"
+      routerLink="/protocol"
+      routerLinkActive="ring-2 ring-blue-400"
+      class="bg-[#F4F5F7] hover:bg-white text-[#333333] text-sm font-medium px-5 py-3.5 rounded-lg shadow-[0_2px_4px_rgba(0,0,0,0.14)] transition-colors cursor-pointer">
+      Protokoll
+    </button>
+  </div>
+
+  <!-- Dreapta: Sprachausgabe & Logout -->
+  <div class="flex items-center gap-3">
+    <button
+      type="button"
+      (click)="toggleAudio()"
+      class="bg-[#F4F5F7] hover:bg-white text-black text-sm font-medium px-6 py-3.5 rounded-lg shadow-xs transition-colors flex items-center gap-2 cursor-pointer">
+      <span>{{ isAudioOn() ? '🔊' : '🔇' }}</span>
+      <span>Sprachausgabe: {{ isAudioOn() ? 'AN' : 'AUS' }}</span>
+    </button>
+
+    <button
+      type="button"
+      (click)="logout()"
+      class="bg-[#F4F5F7] hover:bg-white text-black text-sm font-medium px-6 py-3.5 rounded-lg shadow-xs transition-colors cursor-pointer">
+      Logout
+    </button>
+  </div>
+
+</nav>

@@ -1,0 +1,78 @@
+<div class="min-h-[calc(100vh-76px)] bg-[#FAFAFA] py-8 px-4 sm:px-8">
+  <div class="max-w-5xl mx-auto flex flex-col gap-4">
+
+    @if (errorMessage()) {
+      <div class="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-5 py-4">
+        {{ errorMessage() }}
+      </div>
+    } @else {
+      <!-- Card 1: Rezumat progres -->
+      <div class="bg-white border border-gray-200 rounded-lg px-6 py-5 flex flex-col sm:flex-row sm:items-center gap-6 sm:gap-20">
+
+        <!-- Gesamtfortschritt -->
+        <div class="flex items-center gap-4">
+          <div class="w-11 h-11 rounded-lg bg-[#E4ECFA] flex items-center justify-center shrink-0">
+            <svg class="w-5 h-5 text-[#1F2937]" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <rect x="4" y="14" width="3" height="6" rx="1"></rect>
+              <rect x="10.5" y="10" width="3" height="10" rx="1"></rect>
+              <rect x="17" y="5" width="3" height="15" rx="1"></rect>
+            </svg>
+          </div>
+          <div>
+            <p class="text-[15px] font-medium text-[#1F2937]">
+              Gesamtfortschritt: {{ completedLevels() }}/{{ totalLevels() }} Lektionen
+            </p>
+            <p class="text-xs text-gray-500 mt-0.5">
+              An Lernfortschritt im Lektionsbereich
+            </p>
+          </div>
+        </div>
+
+        <!-- Aktueller Fortschritt (ultimele 30 de zile) -->
+        <!-- TODO: înlocuiește 0/0 cu semnalele recentCompleted / recentTotal când sunt gata endpoint-urile -->
+        <div>
+          <p class="text-[15px] font-medium text-[#1F2937]">
+            Aktueller Fortschritt: 0/0 Lektionen
+          </p>
+          <p class="text-xs text-gray-500 mt-0.5">
+            An Lernfortschritt in den letzten 30 Tagen
+          </p>
+        </div>
+
+      </div>
+
+      <!-- Card 2: Tabel istoric încercări -->
+      <div class="bg-white border border-gray-200 rounded-lg px-6 sm:px-8 py-6 overflow-x-auto">
+        @if (isLoading()) {
+          <p class="text-sm text-gray-500 py-8 text-center">Protokoll wird geladen...</p>
+        } @else if (rows().length === 0) {
+          <p class="text-sm text-gray-500 py-8 text-center">Noch keine Einträge im Protokoll vorhanden.</p>
+        } @else {
+          <table class="w-full text-left border-collapse">
+            <thead>
+            <tr class="border-b border-gray-200">
+              <th class="py-3 pr-6 text-xs font-semibold text-[#1F2937] whitespace-nowrap">Datum</th>
+              <th class="py-3 pr-6 text-xs font-semibold text-[#1F2937] whitespace-nowrap">Level</th>
+              <th class="py-3 pr-6 text-xs font-semibold text-[#1F2937] whitespace-nowrap">Beendet</th>
+              <th class="py-3 pr-6 text-xs font-semibold text-[#1F2937] whitespace-nowrap">Fortschritt</th>
+              <th class="py-3 text-xs font-semibold text-[#1F2937] whitespace-nowrap">Zeit</th>
+            </tr>
+            </thead>
+            <tbody>
+              @for (row of rows(); track $index) {
+                <tr class="border-b border-gray-100 last:border-b-0">
+                  <td class="py-3.5 pr-6 text-xs font-medium text-[#111827] whitespace-nowrap">{{ row.date }}</td>
+                  <td class="py-3.5 pr-6 text-xs font-medium text-[#111827]">{{ row.levelName }}</td>
+                  <td class="py-3.5 pr-6 text-xs font-medium text-[#111827] whitespace-nowrap">{{ row.status }}</td>
+                  <td class="py-3.5 pr-6 text-xs font-medium text-[#111827] whitespace-nowrap">{{ row.progress }}</td>
+                  <td class="py-3.5 text-xs font-medium text-[#111827] whitespace-nowrap">{{ row.duration }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </div>
+    }
+
+  </div>
+</div>

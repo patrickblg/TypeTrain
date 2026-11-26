@@ -1,0 +1,126 @@
+<div class="min-h-[calc(100vh-76px)] bg-[#FAFAFA] py-8 px-4 sm:px-8">
+  <div class="max-w-5xl mx-auto flex flex-col gap-5">
+
+    @if (errorMessage()) {
+      <div class="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-5 py-4">
+        {{ errorMessage() }}
+      </div>
+    } @else {
+      <div class="bg-white border border-gray-200 rounded-lg px-6 py-5 flex flex-col gap-4">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div class="flex items-center gap-4">
+            <div class="w-11 h-11 rounded-lg bg-[#E4ECFA] flex items-center justify-center shrink-0">
+              <svg class="w-5 h-5 text-[#1F2937]" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <rect x="4" y="14" width="3" height="6" rx="1"></rect>
+                <rect x="10.5" y="10" width="3" height="10" rx="1"></rect>
+                <rect x="17" y="5" width="3" height="15" rx="1"></rect>
+              </svg>
+            </div>
+            <div>
+              <h1 class="text-[15px] font-semibold text-[#1F2937]">
+                Gesamtfortschritt: {{ completedLevels() }}/{{ totalLevels() }} Lektionen ({{ progressPercent() }}%)
+              </h1>
+              <p class="text-xs text-gray-500 mt-0.5">
+                Wähle eine Lektion aus, um mit dem Tipptraining zu starten.
+              </p>
+            </div>
+          </div>
+
+          @if (nextLevel(); as next) {
+            <button
+              type="button"
+              (click)="startLevel(next.id)"
+              class="bg-[#93C5FD] hover:bg-blue-400 text-black text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors cursor-pointer whitespace-nowrap">
+              Weiterlernen
+            </button>
+          }
+        </div>
+
+        <div class="w-full h-3 bg-[#E4ECFA] rounded-full overflow-hidden">
+          <div
+            class="h-full bg-[#60A5FA] rounded-full transition-all duration-300"
+            [style.width.%]="progressPercent()">
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white border border-gray-200 rounded-lg p-6">
+        <div class="flex items-center justify-between mb-5">
+          <h2 class="text-base font-semibold text-[#1F2937]">Lektionsübersicht</h2>
+          <span class="text-xs text-gray-500">{{ totalLevels() }} Lektionen insgesamt</span>
+        </div>
+
+        @if (isLoading()) {
+          <p class="text-sm text-gray-500 py-10 text-center">Lektionen werden geladen...</p>
+        } @else if (levelCards().length === 0) {
+          <p class="text-sm text-gray-500 py-10 text-center">Keine Lektionen gefunden.</p>
+        } @else {
+          <div class="flex flex-col gap-3 max-h-[520px] overflow-y-auto pr-2">
+            @for (level of levelCards(); track level.id) {
+              <div
+                class="w-full border rounded-lg p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors shrink-0"
+                [class]="level.isCompleted ? 'border-[#BFDBFE] bg-[#F8FBFF]' : 'border-gray-200 bg-white hover:border-gray-300'">
+
+                <!-- Stânga: Titlu, status și descriere -->
+                <div class="flex flex-col gap-1.5 flex-1 min-w-0">
+                  <div class="flex items-center gap-2.5 flex-wrap">
+                    <h3 class="text-sm font-semibold text-[#111827] leading-snug">
+                      {{ level.title }}
+                    </h3>
+                    <span
+                      class="text-[11px] font-medium px-2.5 py-0.5 rounded-full shrink-0"
+                      [class]="level.isCompleted ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'">
+              {{ level.isCompleted ? 'Abgeschlossen' : 'Offen' }}
+            </span>
+                  </div>
+
+                  @if (level.description) {
+                    <p class="text-xs text-gray-500">{{ level.description }}</p>
+                  }
+                </div>
+
+                <!-- Dreapta: Stele, procentaj și buton -->
+                <div class="flex flex-col sm:flex-row sm:items-center gap-4 pt-3 sm:pt-0 border-t sm:border-t-0 border-gray-100 shrink-0">
+                  <div class="flex items-center justify-between sm:flex-col sm:items-end gap-1">
+                    <div class="flex items-center gap-1" aria-label="Sterne">
+                      @for (star of starSlots; track star) {
+                        <svg
+                          class="w-4 h-4"
+                          [class]="star <= level.bestStars ? 'text-amber-400' : 'text-gray-200'"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          aria-hidden="true">
+                          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                        </svg>
+                      }
+                    </div>
+
+                    <span class="text-xs font-medium text-gray-600">
+              @if (level.bestPercent !== null) {
+                Beste Genauigkeit: {{ level.bestPercent }}%
+              } @else {
+                Noch nicht geübt
+              }
+            </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    (click)="startLevel(level.id)"
+                    class="w-full sm:w-32 py-2 px-4 rounded-md text-xs font-semibold transition-colors cursor-pointer shrink-0"
+                    [class]="level.isCompleted
+              ? 'bg-[#F4F5F7] hover:bg-gray-200 text-[#1F2937]'
+              : 'bg-[#93C5FD] hover:bg-blue-400 text-black'">
+                    {{ level.isCompleted ? 'Wiederholen' : 'Starten' }}
+                  </button>
+                </div>
+
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+
+  </div>
+</div>
