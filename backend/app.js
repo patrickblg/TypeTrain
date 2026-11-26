@@ -29,7 +29,6 @@ app.use('/users', usersRouter);
 
 const database = require('./database');
 const {all} = require("express/lib/application");
-const { toEnabledIds } = require('./services/layoutSuggester');
 
 //TODO Where to do the process of a "Game" counting, just using one Char, checking etc ?
 

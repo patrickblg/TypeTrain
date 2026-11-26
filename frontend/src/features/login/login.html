@@ -23,7 +23,7 @@
           <label class="text-xs text-gray-600 mb-1 ml-1">Dein Name</label>
 
           <mat-form-field appearance="outline" class="w-full" subscriptSizing="dynamic">
-            <input matInput #nameInput placeholder="(z.B. Max)" class="text-black" />
+            <input matInput #nameInput (keyup.enter) = "showProfile(nameInput.value)" placeholder="(z.B. Max)" class="text-black" />
           </mat-form-field>
         </div>
 
